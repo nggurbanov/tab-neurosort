@@ -215,8 +215,8 @@
     "property": "neurosort.custom.model",
     "type": "string",
     "label": "Model ID",
-    "default": "gpt-4o-mini",
-    "placeholder": "gpt-4o-mini, llama3.2, etc.",
+    "default": "cx/gpt-5.1-codex-mini",
+    "placeholder": "cx/gpt-5.1-codex-mini, gpt-4o-mini, etc.",
     "conditions": [
       { "if": { "property": "neurosort.enabled", "value": true } },
       { "if": { "property": "neurosort.provider", "value": "custom" } }

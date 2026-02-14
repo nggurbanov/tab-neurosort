@@ -212,7 +212,7 @@
           this.config = {
             endpoint: getPref(PREF.CUSTOM_ENDPOINT, 'https://ai.redivo.ru/v1'),
             apiKey: getPref(PREF.CUSTOM_API_KEY, ''),
-            model: getPref(PREF.CUSTOM_MODEL, 'gpt-4o-mini'),
+            model: getPref(PREF.CUSTOM_MODEL, 'cx/gpt-5.1-codex-mini'),
             format: getPref(PREF.CUSTOM_FORMAT, 'openai')
           };
           break;
@@ -315,7 +315,37 @@ OUTPUT FORMAT:
     }
 
     /**
+     * Parse streaming SSE response
+     */
+    parseStreamingResponse(text) {
+      // Handle streaming format: "data: {...}\n\ndata: {...}\n\ndata: [DONE]"
+      const lines = text.split('\n');
+      let fullContent = '';
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data: ')) {
+          const dataStr = trimmed.slice(6);
+          if (dataStr === '[DONE]') break;
+          
+          try {
+            const data = JSON.parse(dataStr);
+            // Handle both streaming delta format and regular response format
+            const delta = data.choices?.[0]?.delta?.content || 
+                         data.choices?.[0]?.message?.content || '';
+            fullContent += delta;
+          } catch (e) {
+            // Skip invalid JSON lines
+          }
+        }
+      }
+      
+      return fullContent.trim();
+    }
+
+    /**
      * OpenAI-compatible request (works for OpenAI and custom endpoints)
+     * Handles both streaming and non-streaming responses
      */
     async openaiRequest(prompt) {
       const url = `${this.config.endpoint}/chat/completions`;
@@ -332,7 +362,7 @@ OUTPUT FORMAT:
         messages: [
           {
             role: 'system',
-            content: 'You are a tab organization assistant. Categorize tabs concisely and consistently.'
+            content: 'You are a tab organization assistant. Categorize tabs concisely and consistently. Output ONLY category names, one per line, no numbering or explanations.'
           },
           {
             role: 'user',
@@ -341,9 +371,10 @@ OUTPUT FORMAT:
         ],
         temperature: 0.1,
         max_tokens: Math.max(256, prompt.length / 4),
+        stream: false
       };
 
-      log('OpenAI request to:', url);
+      log('OpenAI request to:', url, 'with model:', this.config.model);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -353,17 +384,42 @@ OUTPUT FORMAT:
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
-        throw new Error(`API Error ${response.status}: ${errorText}`);
+        logError('API Error Response:', errorText);
+        throw new Error(`API Error ${response.status}: ${errorText.substring(0, 200)}`);
       }
 
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content;
+      const responseText = await response.text();
+      log('Raw response (first 500 chars):', responseText.substring(0, 500));
 
-      if (!content) {
-        throw new Error('Empty response from API');
+      // Check if response is streaming format (starts with "data:")
+      if (responseText.trim().startsWith('data:')) {
+        log('Detected streaming response format, parsing...');
+        const content = this.parseStreamingResponse(responseText);
+        if (!content) {
+          throw new Error('Empty content from streaming response');
+        }
+        return content;
       }
 
-      return content.trim();
+      // Parse as regular JSON
+      try {
+        const data = JSON.parse(responseText);
+        const content = data.choices?.[0]?.message?.content;
+        
+        if (!content) {
+          throw new Error('Empty response from API');
+        }
+        
+        return content.trim();
+      } catch (e) {
+        // If JSON parse fails, try to extract content from streaming-like format
+        log('JSON parse failed, trying streaming parse:', e.message);
+        const content = this.parseStreamingResponse(responseText);
+        if (!content) {
+          throw new Error('Could not parse API response');
+        }
+        return content;
+      }
     }
 
     /**
@@ -457,15 +513,15 @@ OUTPUT FORMAT:
 
       // Build prompt
       const prompt = this.buildPrompt(tabsData, existingGroups);
-      log('Prompt:', prompt.substring(0, 500) + '...');
+      log('Prompt length:', prompt.length);
 
       // Make request
       const response = await this.makeRequest(prompt);
-      log('Raw response:', response);
+      log('AI Response:', response);
 
       // Parse response
       const categories = this.parseResponse(response, tabs.length);
-      log('Categories:', categories);
+      log('Parsed categories:', categories);
 
       // Return tab->category mappings
       return tabs.map((tab, i) => ({

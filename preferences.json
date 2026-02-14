@@ -1,0 +1,302 @@
+[
+  {
+    "type": "text",
+    "label": "**NeuroSort** - AI-powered tab organization",
+    "size": "14px",
+    "margin": "0 0 10px 0"
+  },
+  {
+    "type": "separator",
+    "label": "Feature Toggles"
+  },
+  {
+    "property": "neurosort.enabled",
+    "type": "checkbox",
+    "label": "Enable NeuroSort Tidy Tabs",
+    "default": true
+  },
+  {
+    "property": "neurosort.auto_tidy",
+    "type": "checkbox",
+    "label": "Auto-tidy when ungrouped tabs exceed threshold",
+    "default": false,
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } }
+    ]
+  },
+  {
+    "property": "neurosort.auto_tidy_threshold",
+    "type": "number",
+    "label": "Auto-tidy threshold (number of tabs)",
+    "default": 6,
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.auto_tidy", "value": true } }
+    ],
+    "operator": "AND"
+  },
+  {
+    "property": "neurosort.auto_tidy_cooldown",
+    "type": "number",
+    "label": "Auto-tidy cooldown (seconds)",
+    "default": 30,
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.auto_tidy", "value": true } }
+    ],
+    "operator": "AND"
+  },
+
+  {
+    "type": "separator",
+    "label": "AI Provider",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } }
+    ]
+  },
+  {
+    "property": "neurosort.provider",
+    "type": "dropdown",
+    "label": "Select AI Provider",
+    "default": "custom",
+    "options": [
+      { "value": "openai", "label": "OpenAI" },
+      { "value": "gemini", "label": "Google Gemini" },
+      { "value": "ollama", "label": "Ollama (Local)" },
+      { "value": "custom", "label": "Custom Endpoint" }
+    ],
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } }
+    ]
+  },
+
+  {
+    "type": "separator",
+    "label": "OpenAI Configuration",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "openai" } }
+    ],
+    "operator": "AND"
+  },
+  {
+    "property": "neurosort.openai.api_key",
+    "type": "string",
+    "label": "OpenAI API Key",
+    "placeholder": "sk-...",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "openai" } }
+    ],
+    "operator": "AND"
+  },
+  {
+    "property": "neurosort.openai.model",
+    "type": "string",
+    "label": "Model",
+    "default": "gpt-4o-mini",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "openai" } }
+    ],
+    "operator": "AND"
+  },
+  {
+    "property": "neurosort.openai.endpoint",
+    "type": "string",
+    "label": "Custom Endpoint (optional)",
+    "placeholder": "https://api.openai.com/v1",
+    "default": "https://api.openai.com/v1",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "openai" } }
+    ],
+    "operator": "AND"
+  },
+
+  {
+    "type": "separator",
+    "label": "Gemini Configuration",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "gemini" } }
+    ],
+    "operator": "AND"
+  },
+  {
+    "property": "neurosort.gemini.api_key",
+    "type": "string",
+    "label": "Gemini API Key",
+    "placeholder": "AIza...",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "gemini" } }
+    ],
+    "operator": "AND"
+  },
+  {
+    "property": "neurosort.gemini.model",
+    "type": "string",
+    "label": "Model",
+    "default": "gemini-2.0-flash",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "gemini" } }
+    ],
+    "operator": "AND"
+  },
+
+  {
+    "type": "separator",
+    "label": "Ollama Configuration",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "ollama" } }
+    ],
+    "operator": "AND"
+  },
+  {
+    "property": "neurosort.ollama.endpoint",
+    "type": "string",
+    "label": "Ollama Endpoint",
+    "default": "http://localhost:11434",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "ollama" } }
+    ],
+    "operator": "AND"
+  },
+  {
+    "property": "neurosort.ollama.model",
+    "type": "string",
+    "label": "Model",
+    "default": "llama3.2",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "ollama" } }
+    ],
+    "operator": "AND"
+  },
+
+  {
+    "type": "separator",
+    "label": "Custom Endpoint Configuration",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "custom" } }
+    ],
+    "operator": "AND"
+  },
+  {
+    "property": "neurosort.custom.endpoint",
+    "type": "string",
+    "label": "Endpoint URL",
+    "default": "https://ai.redivo.ru/v1",
+    "placeholder": "https://api.example.com/v1",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "custom" } }
+    ],
+    "operator": "AND"
+  },
+  {
+    "property": "neurosort.custom.api_key",
+    "type": "string",
+    "label": "API Key",
+    "default": "sk-a95e62ae5307cbbb-x8mkis-d38d70f8",
+    "placeholder": "Enter your API key",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "custom" } }
+    ],
+    "operator": "AND"
+  },
+  {
+    "property": "neurosort.custom.model",
+    "type": "string",
+    "label": "Model ID",
+    "default": "gpt-4o-mini",
+    "placeholder": "gpt-4o-mini, llama3.2, etc.",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "custom" } }
+    ],
+    "operator": "AND"
+  },
+  {
+    "property": "neurosort.custom.format",
+    "type": "dropdown",
+    "label": "Request Format",
+    "default": "openai",
+    "options": [
+      { "value": "openai", "label": "OpenAI-compatible" },
+      { "value": "ollama", "label": "Ollama format" }
+    ],
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } },
+      { "if": { "property": "neurosort.provider", "value": "custom" } }
+    ],
+    "operator": "AND"
+  },
+
+  {
+    "type": "separator",
+    "label": "Sorting Behavior",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } }
+    ]
+  },
+  {
+    "property": "neurosort.min_group_size",
+    "type": "number",
+    "label": "Minimum tabs to form a group",
+    "default": 2,
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } }
+    ]
+  },
+  {
+    "property": "neurosort.preserve_pinned",
+    "type": "checkbox",
+    "label": "Never group pinned tabs",
+    "default": true,
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } }
+    ]
+  },
+  {
+    "property": "neurosort.use_existing_groups",
+    "type": "checkbox",
+    "label": "Prefer existing group names when categorizing",
+    "default": true,
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } }
+    ]
+  },
+  {
+    "property": "neurosort.fetch_descriptions",
+    "type": "checkbox",
+    "label": "Fetch page descriptions for better context (slower)",
+    "default": true,
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } }
+    ]
+  },
+
+  {
+    "type": "separator",
+    "label": "Debug",
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } }
+    ]
+  },
+  {
+    "property": "neurosort.debug",
+    "type": "checkbox",
+    "label": "Enable debug logging to console",
+    "default": false,
+    "conditions": [
+      { "if": { "property": "neurosort.enabled", "value": true } }
+    ]
+  }
+]

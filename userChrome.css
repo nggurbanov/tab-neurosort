@@ -1,0 +1,281 @@
+/**
+ * NeuroSort - AI-powered Tab Organization for Zen Browser
+ * userChrome.css - Custom styling for the broom button and UI elements
+ * 
+ * Note: Primary styles are injected via JavaScript in neurosort.uc.js
+ * This file provides additional customization hooks and fallback styles.
+ */
+
+/* ============================================================================
+   BROOM BUTTON - Primary Styles (fallback/override)
+   ============================================================================ */
+
+/* The broom button container positioning */
+#zen-workspaces-button {
+  position: relative !important;
+}
+
+/* Broom button - fallback styles if JS injection fails */
+#neurosort-broom {
+  position: absolute !important;
+  top: 50% !important;
+  right: 8px !important;
+  transform: translateY(-50%) !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 4px !important;
+  border: none !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: var(--zen-text-secondary, #888) !important;
+  cursor: pointer !important;
+  opacity: 0 !important;
+  transition: opacity 0.2s ease, background 0.2s ease, transform 0.2s ease !important;
+  z-index: 1000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+#neurosort-broom:hover {
+  opacity: 1 !important;
+  background: var(--zen-button-hover-bg, rgba(255,255,255,0.1)) !important;
+  color: var(--zen-text-primary, #fff) !important;
+}
+
+/* Show button when parent is hovered */
+#zen-workspaces-button:hover #neurosort-broom,
+.zen-sidebar-top:hover #neurosort-broom,
+#TabsToolbar:hover #neurosort-broom {
+  opacity: 0.7 !important;
+}
+
+/* Sorting state animation */
+#neurosort-broom.sorting {
+  opacity: 1 !important;
+  animation: neurosort-pulse 1s ease-in-out infinite !important;
+}
+
+@keyframes neurosort-pulse {
+  0%, 100% { 
+    opacity: 0.6; 
+    transform: translateY(-50%) scale(1); 
+  }
+  50% { 
+    opacity: 1; 
+    transform: translateY(-50%) scale(1.1); 
+  }
+}
+
+/* ============================================================================
+   TAB SORTING ANIMATIONS
+   ============================================================================ */
+
+/* Tab pulsing animation while sorting */
+.neurosort-sorting .tab-icon-image,
+.neurosort-sorting .tab-label {
+  animation: neurosort-tab-pulse 1.5s ease-in-out infinite !important;
+}
+
+@keyframes neurosort-tab-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Tab closing animation */
+.tabbrowser-tab.neurosort-closing {
+  animation: neurosort-fade-up 0.5s forwards !important;
+}
+
+@keyframes neurosort-fade-up {
+  0% { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+  100% { 
+    opacity: 0; 
+    transform: translateY(-20px); 
+    max-height: 0px; 
+    padding: 0; 
+    margin: 0; 
+  }
+}
+
+/* ============================================================================
+   TOAST NOTIFICATIONS
+   ============================================================================ */
+
+#neurosort-toast-container {
+  position: fixed !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  z-index: 999999 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  pointer-events: none !important;
+}
+
+.neurosort-toast {
+  padding: 12px 20px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+  animation: neurosort-toast-in 0.3s ease !important;
+  max-width: 300px !important;
+  pointer-events: auto !important;
+}
+
+.neurosort-toast-success {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+}
+
+.neurosort-toast-error {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+}
+
+.neurosort-toast-info {
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+}
+
+.neurosort-toast-fade {
+  animation: neurosort-toast-out 0.3s ease forwards !important;
+}
+
+@keyframes neurosort-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes neurosort-toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+/* ============================================================================
+   GROUP CREATION ANIMATIONS
+   ============================================================================ */
+
+/* Smooth transition for new groups */
+tab-group {
+  transition: opacity 0.3s ease, transform 0.3s ease !important;
+}
+
+tab-group.neurosort-new {
+  animation: neurosort-group-in 0.5s ease !important;
+}
+
+@keyframes neurosort-group-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================================================ */
+
+/* Sidebar compact mode */
+#sidebar-box[sidebarstyle="compact"] #neurosort-broom {
+  width: 24px !important;
+  height: 24px !important;
+  right: 4px !important;
+}
+
+/* Fullscreen mode - hide toast container */
+:root[inFullscreen] #neurosort-toast-container {
+  bottom: 80px !important;
+}
+
+/* ============================================================================
+   DARK MODE SUPPORT
+   ============================================================================ */
+
+@media (prefers-color-scheme: dark) {
+  #neurosort-broom {
+    color: var(--zen-text-secondary, #aaa) !important;
+  }
+  
+  #neurosort-broom:hover {
+    background: var(--zen-button-hover-bg, rgba(255,255,255,0.15)) !important;
+    color: var(--zen-text-primary, #eee) !important;
+  }
+}
+
+/* ============================================================================
+   ZEN BROWSER SPECIFIC ADJUSTMENTS
+   ============================================================================ */
+
+/* Zen Workspaces Button positioning */
+#zen-workspaces-button {
+  position: relative !important;
+}
+
+/* Zen Sidebar specific */
+.zen-sidebar #neurosort-broom {
+  right: 4px !important;
+}
+
+/* Zen Split View - don't show button in split view tabs */
+.split-view-tab #neurosort-broom {
+  display: none !important;
+}
+
+/* ============================================================================
+   ACCESSIBILITY
+   ============================================================================ */
+
+/* Focus state */
+#neurosort-broom:focus {
+  outline: 2px solid var(--zen-primary-color, #3b82f6) !important;
+  outline-offset: 2px !important;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  #neurosort-broom {
+    border: 1px solid currentColor !important;
+  }
+  
+  .neurosort-toast {
+    border: 2px solid #fff !important;
+  }
+}
+
+/* ============================================================================
+   CUSTOMIZATION HOOKS
+   ============================================================================ */
+
+/* Users can override these variables in their own userChrome.css */
+:root {
+  --neurosort-button-size: 28px;
+  --neurosort-button-offset: 8px;
+  --neurosort-toast-duration: 3s;
+  --neurosort-animation-speed: 0.3s;
+}
+
+/* Apply custom variables */
+#neurosort-broom {
+  width: var(--neurosort-button-size) !important;
+  height: var(--neurosort-button-size) !important;
+  right: var(--neurosort-button-offset) !important;
+}

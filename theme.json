@@ -2,19 +2,26 @@
     "id": "tab-neurosort",
     "name": "NeuroSort",
     "description": "AI-powered tab sorting for Zen Browser. Automatically organize your tabs into smart groups using OpenAI-compatible APIs. Inspired by Arc Browser's Tidy Tabs.",
+    "scripts": {
+        "neurosort.uc.js": {
+            "include": [
+                "chrome://browser/content/browser.xhtml"
+            ]
+        }
+    },
+    "style": {
+        "chrome": "userChrome.css"
+    },
     "homepage": "https://github.com/nggurbanov/tab-neurosort",
     "preferences": "https://raw.githubusercontent.com/nggurbanov/tab-neurosort/main/preferences.json",
-    "js": true,
     "readme": "https://raw.githubusercontent.com/nggurbanov/tab-neurosort/main/README.md",
     "author": "Tyrell",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "tags": [
-        "sine",
+        "Zen Browser",
         "tab-groups",
         "ai",
-        "tidy-tabs",
-        "fx-autoconfig",
-        "JavaScript"
+        "tidy-tabs"
     ],
     "createdAt": "2025-02-15",
     "updatedAt": "2025-02-15",

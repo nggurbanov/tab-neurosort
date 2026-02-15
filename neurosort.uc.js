@@ -1,25 +1,4 @@
-// ==UserScript==
-// @name           NeuroSort
-// @namespace      https://github.com/tyrell/tab-neurosort
-// @description    AI-powered tab sorting for Zen Browser
-// @version        1.0.0
-// @author         Tyrell
-// @license        MIT
-// @ignorecache
-// ==/UserScript==
-
-/**
- * NeuroSort - AI-powered tab organization for Zen Browser
- * Inspired by Arc Browser's Tidy Tabs feature
- * 
- * Features:
- * - OpenAI-compatible API support (OpenAI, Gemini, Ollama, custom endpoints)
- * - Arc-style broom button UI
- * - Auto-tidy with configurable threshold
- * - Integration with Advanced Tab Groups
- * - Meta description fetching for better AI context
- */
-
+// VERSION 1.0.1 - NeuroSort - AI-powered tab organization for Zen Browser
 (() => {
   'use strict';
 
@@ -28,35 +7,35 @@
   // ============================================================================
 
   const PREF = {
-    ENABLED: 'neurosort.enabled',
-    AUTO_TIDY: 'neurosort.auto_tidy',
-    AUTO_TIDY_THRESHOLD: 'neurosort.auto_tidy_threshold',
-    AUTO_TIDY_COOLDOWN: 'neurosort.auto_tidy_cooldown',
-    PROVIDER: 'neurosort.provider',
-    MIN_GROUP_SIZE: 'neurosort.min_group_size',
-    PRESERVE_PINNED: 'neurosort.preserve_pinned',
-    USE_EXISTING_GROUPS: 'neurosort.use_existing_groups',
-    FETCH_DESCRIPTIONS: 'neurosort.fetch_descriptions',
-    DEBUG: 'neurosort.debug',
+    ENABLED: 'extensions.neurosort.enabled',
+    AUTO_TIDY: 'extensions.neurosort.auto_tidy',
+    AUTO_TIDY_THRESHOLD: 'extensions.neurosort.auto_tidy_threshold',
+    AUTO_TIDY_COOLDOWN: 'extensions.neurosort.auto_tidy_cooldown',
+    PROVIDER: 'extensions.neurosort.provider',
+    MIN_GROUP_SIZE: 'extensions.neurosort.min_group_size',
+    PRESERVE_PINNED: 'extensions.neurosort.preserve_pinned',
+    USE_EXISTING_GROUPS: 'extensions.neurosort.use_existing_groups',
+    FETCH_DESCRIPTIONS: 'extensions.neurosort.fetch_descriptions',
+    DEBUG: 'extensions.neurosort.debug',
 
     // OpenAI
-    OPENAI_API_KEY: 'neurosort.openai.api_key',
-    OPENAI_MODEL: 'neurosort.openai.model',
-    OPENAI_ENDPOINT: 'neurosort.openai.endpoint',
+    OPENAI_API_KEY: 'extensions.neurosort.openai.api_key',
+    OPENAI_MODEL: 'extensions.neurosort.openai.model',
+    OPENAI_ENDPOINT: 'extensions.neurosort.openai.endpoint',
 
     // Gemini
-    GEMINI_API_KEY: 'neurosort.gemini.api_key',
-    GEMINI_MODEL: 'neurosort.gemini.model',
+    GEMINI_API_KEY: 'extensions.neurosort.gemini.api_key',
+    GEMINI_MODEL: 'extensions.neurosort.gemini.model',
 
     // Ollama
-    OLLAMA_ENDPOINT: 'neurosort.ollama.endpoint',
-    OLLAMA_MODEL: 'neurosort.ollama.model',
+    OLLAMA_ENDPOINT: 'extensions.neurosort.ollama.endpoint',
+    OLLAMA_MODEL: 'extensions.neurosort.ollama.model',
 
     // Custom
-    CUSTOM_ENDPOINT: 'neurosort.custom.endpoint',
-    CUSTOM_API_KEY: 'neurosort.custom.api_key',
-    CUSTOM_MODEL: 'neurosort.custom.model',
-    CUSTOM_FORMAT: 'neurosort.custom.format',
+    CUSTOM_ENDPOINT: 'extensions.neurosort.custom.endpoint',
+    CUSTOM_API_KEY: 'extensions.neurosort.custom.api_key',
+    CUSTOM_MODEL: 'extensions.neurosort.custom.model',
+    CUSTOM_FORMAT: 'extensions.neurosort.custom.format',
   };
 
   // ============================================================================
@@ -91,7 +70,7 @@
         }
       }
     } catch (e) {
-      log(`Error reading preference ${prefName}:`, e);
+      log(\`Error reading preference \${prefName}:\`, e);
     }
     return defaultValue;
   };
@@ -224,27 +203,27 @@
      */
     buildPrompt(tabsData, existingGroups = []) {
       const existingGroupsList = existingGroups.length > 0
-        ? existingGroups.map(g => `- ${g}`).join('\n')
+        ? existingGroups.map(g => \`- \${g}\`).join('\\n')
         : 'None';
 
       const tabsList = tabsData.map((data, i) => {
-        const parts = [`${i + 1}. Title: "${data.title}"`];
+        const parts = [\`\${i + 1}. Title: "\${data.title}"\`];
         if (data.url && !data.url.startsWith('about:')) {
-          parts.push(`   URL: "${data.url}"`);
+          parts.push(\`   URL: "\${data.url}"\`);
         }
         if (data.description) {
-          parts.push(`   Description: "${data.description}"`);
+          parts.push(\`   Description: "\${data.description}"\`);
         }
-        return parts.join('\n');
-      }).join('\n\n');
+        return parts.join('\\n');
+      }).join('\\n\\n');
 
-      return `Analyze the following tabs and assign each to a logical category.
+      return \`Analyze the following tabs and assign each to a logical category.
 
 EXISTING CATEGORIES (use these exact names if a tab fits):
-${existingGroupsList}
+\${existingGroupsList}
 
 TABS TO CATEGORIZE:
-${tabsList}
+\${tabsList}
 
 INSTRUCTIONS:
 1. Assign each tab to a concise category (1-3 words, Title Case)
@@ -257,7 +236,7 @@ OUTPUT FORMAT:
 - Output exactly ONE category per line
 - Match the number of tabs above
 - No numbering, no explanations, no extra text
-- Just the category names, one per line`;
+- Just the category names, one per line\`;
     }
 
     /**
@@ -265,7 +244,7 @@ OUTPUT FORMAT:
      */
     parseResponse(responseText, tabsCount) {
       const lines = responseText
-        .split('\n')
+        .split('\\n')
         .map(line => line.trim())
         .filter(line => line.length > 0 && !line.startsWith('#'));
 
@@ -273,20 +252,20 @@ OUTPUT FORMAT:
       const categories = lines.map(line => {
         // Remove numbering, quotes, markdown formatting
         return line
-          .replace(/^[\d.\-*\s]+/, '')
+          .replace(/^[\\d.\\-*\\s]+/, '')
           .replace(/["'*]/g, '')
-          .replace(/^(Category:?\s*|The category is:?\s*)/i, '')
+          .replace(/^(Category:?\\s*|The category is:?\\s*)/i, '')
           .trim();
       }).filter(line => line.length > 0);
 
       // Handle mismatch in count
       if (categories.length < tabsCount) {
-        log(`Warning: AI returned ${categories.length} categories for ${tabsCount} tabs. Padding with "Misc".`);
+        log(\`Warning: AI returned \${categories.length} categories for \${tabsCount} tabs. Padding with "Misc".\`);
         while (categories.length < tabsCount) {
           categories.push('Misc');
         }
       } else if (categories.length > tabsCount) {
-        log(`Warning: AI returned ${categories.length} categories for ${tabsCount} tabs. Truncating.`);
+        log(\`Warning: AI returned \${categories.length} categories for \${tabsCount} tabs. Truncating.\`);
         categories.length = tabsCount;
       }
 
@@ -318,8 +297,8 @@ OUTPUT FORMAT:
      * Parse streaming SSE response
      */
     parseStreamingResponse(text) {
-      // Handle streaming format: "data: {...}\n\ndata: {...}\n\ndata: [DONE]"
-      const lines = text.split('\n');
+      // Handle streaming format: "data: {...}\\n\\ndata: {...}\\n\\ndata: [DONE]"
+      const lines = text.split('\\n');
       let fullContent = '';
       
       for (const line of lines) {
@@ -348,13 +327,13 @@ OUTPUT FORMAT:
      * Handles both streaming and non-streaming responses
      */
     async openaiRequest(prompt) {
-      const url = `${this.config.endpoint}/chat/completions`;
+      const url = \`\${this.config.endpoint}/chat/completions\`;
       const headers = {
         'Content-Type': 'application/json',
       };
 
       if (this.config.apiKey) {
-        headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+        headers['Authorization'] = \`Bearer \${this.config.apiKey}\`;
       }
 
       const body = {
@@ -385,7 +364,7 @@ OUTPUT FORMAT:
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
         logError('API Error Response:', errorText);
-        throw new Error(`API Error ${response.status}: ${errorText.substring(0, 200)}`);
+        throw new Error(\`API Error \${response.status}: \${errorText.substring(0, 200)}\`);
       }
 
       const responseText = await response.text();
@@ -426,7 +405,7 @@ OUTPUT FORMAT:
      * Gemini API request
      */
     async geminiRequest(prompt) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.config.model}:generateContent?key=${this.config.apiKey}`;
+      const url = \`https://generativelanguage.googleapis.com/v1beta/models/\${this.config.model}:generateContent?key=\${this.config.apiKey}\`;
 
       const body = {
         contents: [{
@@ -448,7 +427,7 @@ OUTPUT FORMAT:
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
-        throw new Error(`Gemini API Error ${response.status}: ${errorText}`);
+        throw new Error(\`Gemini API Error \${response.status}: \${errorText}\`);
       }
 
       const data = await response.json();
@@ -465,7 +444,7 @@ OUTPUT FORMAT:
      * Ollama API request
      */
     async ollamaRequest(prompt) {
-      const url = `${this.config.endpoint}/api/generate`;
+      const url = \`\${this.config.endpoint}/api/generate\`;
 
       const body = {
         model: this.config.model,
@@ -487,7 +466,7 @@ OUTPUT FORMAT:
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
-        throw new Error(`Ollama API Error ${response.status}: ${errorText}`);
+        throw new Error(\`Ollama API Error \${response.status}: \${errorText}\`);
       }
 
       const data = await response.json();
@@ -549,7 +528,7 @@ OUTPUT FORMAT:
 
       // Query for tab groups in active workspace
       const selector = workspaceId
-        ? `tab-group:has(tab[zen-workspace-id="${workspaceId}"])`
+        ? \`tab-group:has(tab[zen-workspace-id="\${workspaceId}"])\`
         : 'tab-group';
 
       document.querySelectorAll(selector).forEach(group => {
@@ -574,20 +553,20 @@ OUTPUT FORMAT:
     async findOrCreateGroup(category, workspaceId) {
       // First, try to find existing group with this name
       const safeName = category.replace(/"/g, '\\"');
-      const selector = `tab-group[label="${safeName}"]:has(tab[zen-workspace-id="${workspaceId}"])`;
+      const selector = \`tab-group[label="\${safeName}"]:has(tab[zen-workspace-id="\${workspaceId}"])\`;
       
       let group = document.querySelector(selector);
       
       if (group) {
-        log(`Found existing group: ${category}`);
+        log(\`Found existing group: \${category}\`);
         return group;
       }
 
       // Create new group
-      log(`Creating new group: ${category}`);
+      log(\`Creating new group: \${category}\`);
       
       group = document.createXULElement('tab-group');
-      group.id = `neurosort-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      group.id = \`neurosort-\${Date.now()}-\${Math.random().toString(36).substring(2, 9)}\`;
       group.label = category;
       group.color = getNextGroupColor();
 
@@ -611,7 +590,7 @@ OUTPUT FORMAT:
     async addTabsToGroup(group, tabs) {
       if (!group || !tabs || tabs.length === 0) return;
 
-      log(`Adding ${tabs.length} tabs to group: ${group.label}`);
+      log(\`Adding \${tabs.length} tabs to group: \${group.label}\`);
 
       // Use ATG's addTabs method if available
       if (typeof group.addTabs === 'function') {
@@ -672,7 +651,7 @@ OUTPUT FORMAT:
         ([_, tabs]) => tabs.length >= minGroupSize
       );
 
-      log(`Creating ${validGroups.length} groups (filtered ${Object.keys(groups).length - validGroups.length} small groups)`);
+      log(\`Creating \${validGroups.length} groups (filtered \${Object.keys(groups).length - validGroups.length} small groups)\`);
 
       // Create groups and add tabs
       const createdGroups = [];
@@ -682,7 +661,7 @@ OUTPUT FORMAT:
           await this.addTabsToGroup(group, groupTabs);
           createdGroups.push({ name: category, tabCount: groupTabs.length });
         } catch (e) {
-          logError(`Error creating group ${category}:`, e);
+          logError(\`Error creating group \${category}:\`, e);
         }
       }
 
@@ -841,14 +820,14 @@ OUTPUT FORMAT:
         const result = await this.groupManager.organizeTabs(tabs);
         
         if (result.success) {
-          const message = `Tidied ${tabs.length} tabs into ${result.groupsCreated} groups`;
+          const message = \`Tidied \${tabs.length} tabs into \${result.groupsCreated} groups\`;
           this.showToast(message, 'success');
         } else {
           this.showToast(result.reason || 'Nothing to tidy', 'info');
         }
       } catch (error) {
         logError('Error during tidy:', error);
-        this.showToast(`Error: ${error.message}`, 'error');
+        this.showToast(\`Error: \${error.message}\`, 'error');
       } finally {
         this.isSorting = false;
         this.broomButton?.classList.remove('sorting');
@@ -900,7 +879,7 @@ OUTPUT FORMAT:
         tabs.push(tab);
       }
 
-      log(`Found ${tabs.length} ungrouped tabs`);
+      log(\`Found \${tabs.length} ungrouped tabs\`);
       return tabs;
     }
 
@@ -930,7 +909,7 @@ OUTPUT FORMAT:
 
       // Create toast
       const toast = document.createElement('div');
-      toast.className = `neurosort-toast neurosort-toast-${type}`;
+      toast.className = \`neurosort-toast neurosort-toast-\${type}\`;
       toast.textContent = message;
 
       // Add to container
@@ -1004,7 +983,7 @@ OUTPUT FORMAT:
       
       const ungroupedCount = this.ui.getUngroupedTabs().length;
 
-      log(`Auto-tidy check: ${ungroupedCount} ungrouped tabs (threshold: ${threshold})`);
+      log(\`Auto-tidy check: \${ungroupedCount} ungrouped tabs (threshold: \${threshold})\`);
 
       if (ungroupedCount >= threshold) {
         log('Triggering auto-tidy');
@@ -1038,7 +1017,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      log('NeuroSort initializing...');
+      console.log('[NeuroSort] Initializing v1.0.1...');
 
       // Wait for dependencies
       await this.waitForDependencies();
@@ -1058,12 +1037,7 @@ OUTPUT FORMAT:
 
       // Mark initialized
       this.initialized = true;
-      log('NeuroSort initialized successfully');
-
-      // Show startup toast
-      if (getPref(PREF.DEBUG, false)) {
-        this.ui.showToast('NeuroSort loaded', 'info');
-      }
+      console.log('[NeuroSort] Initialized successfully');
     }
 
     async waitForDependencies() {
@@ -1088,7 +1062,7 @@ OUTPUT FORMAT:
 
       const style = document.createElement('style');
       style.id = 'neurosort-styles';
-      style.textContent = `
+      style.textContent = \`
         /* Broom Button Styles */
         #neurosort-broom {
           position: absolute;
@@ -1220,7 +1194,7 @@ OUTPUT FORMAT:
             color: var(--zen-text-primary, #eee);
           }
         }
-      `;
+      \`;
 
       document.head.appendChild(style);
       log('Styles injected');
@@ -1261,6 +1235,6 @@ OUTPUT FORMAT:
   setTimeout(() => neurosort.init(), 1000);
   setTimeout(() => neurosort.init(), 3000);
 
-  log('NeuroSort script loaded');
+  console.log('[NeuroSort] Script loaded v1.0.1');
 
 })();

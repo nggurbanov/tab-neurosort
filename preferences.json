@@ -290,6 +290,16 @@
     ]
   },
   {
+    "property": "extensions.neurosort.keyboard_shortcut",
+    "type": "string",
+    "label": "Keyboard shortcut (e.g., ctrl+shift+t)",
+    "default": "ctrl+shift+t",
+    "placeholder": "ctrl+shift+t",
+    "conditions": [
+      { "if": { "property": "extensions.neurosort.enabled", "value": true } }
+    ]
+  },
+  {
     "property": "extensions.neurosort.debug",
     "type": "checkbox",
     "label": "Enable debug logging to console",

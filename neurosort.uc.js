@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.0.3 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.0.4 - NeuroSort - AI-powered tab organization for Zen Browser
 (() => {
   'use strict';
 
@@ -40,6 +40,9 @@
     CUSTOM_API_KEY: 'extensions.neurosort.custom.api_key',
     CUSTOM_MODEL: 'extensions.neurosort.custom.model',
     CUSTOM_FORMAT: 'extensions.neurosort.custom.format',
+
+    // Keyboard Shortcut
+    KEYBOARD_SHORTCUT: 'extensions.neurosort.keyboard_shortcut',
   };
 
   // ============================================================================
@@ -74,9 +77,92 @@
         }
       }
     } catch (e) {
-      log(\`Error reading preference \${prefName}:\`, e);
+      log(`Error reading preference ${prefName}:`, e);
     }
     return defaultValue;
+  };
+
+  const parseKeyboardShortcut = (shortcut) => {
+    if (!shortcut || typeof shortcut !== 'string') {
+      return null;
+    }
+
+    const parts = shortcut.toLowerCase().split('+').map(p => p.trim());
+    const modifiers = {
+      ctrl: false,
+      alt: false,
+      shift: false,
+      meta: false,
+    };
+    let key = null;
+
+    for (const part of parts) {
+      if (part === 'ctrl' || part === 'control') {
+        modifiers.ctrl = true;
+      } else if (part === 'alt') {
+        modifiers.alt = true;
+      } else if (part === 'shift') {
+        modifiers.shift = true;
+      } else if (part === 'meta' || part === 'cmd' || part === 'command') {
+        modifiers.meta = true;
+      } else if (part.length === 1) {
+        key = part;
+      } else if (part.length > 1) {
+        key = part;
+      }
+    }
+
+    if (!key) return null;
+
+    return { modifiers, key };
+  };
+
+  const formatShortcutForDisplay = (shortcut) => {
+    if (!shortcut) return '';
+    
+    const isMac = navigator.platform.toLowerCase().includes('mac');
+    const parts = shortcut.toLowerCase().split('+').map(p => p.trim());
+    
+    return parts.map(part => {
+      if (part === 'ctrl' || part === 'control') {
+        return isMac ? '\u2318' : 'Ctrl';
+      } else if (part === 'alt') {
+        return isMac ? '\u2325' : 'Alt';
+      } else if (part === 'shift') {
+        return isMac ? '\u21E7' : 'Shift';
+      } else if (part === 'meta' || part === 'cmd' || part === 'command') {
+        return '\u2318';
+      } else {
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      }
+    }).join(isMac ? '' : '+');
+  };
+
+  const matchesKeyboardEvent = (shortcut, event) => {
+    const parsed = parseKeyboardShortcut(shortcut);
+    if (!parsed) return false;
+
+    const { modifiers, key } = parsed;
+    const isMac = navigator.platform.toLowerCase().includes('mac');
+
+    const eventKey = event.key.toLowerCase();
+    const shortcutKey = key.toLowerCase();
+
+    if (eventKey !== shortcutKey && eventKey !== shortcutKey.charAt(0)) {
+      return false;
+    }
+
+    if (isMac) {
+      if (modifiers.ctrl !== event.metaKey) return false;
+    } else {
+      if (modifiers.ctrl !== event.ctrlKey) return false;
+    }
+
+    if (modifiers.alt !== event.altKey) return false;
+    if (modifiers.shift !== event.shiftKey) return false;
+    if (modifiers.meta !== event.metaKey && !isMac) return false;
+
+    return true;
   };
 
   // ============================================================================
@@ -99,9 +185,6 @@
   // TAB DATA COLLECTION
   // ============================================================================
 
-  /**
-   * Extract data from a tab for AI analysis
-   */
   const getTabData = async (tab) => {
     if (!tab || !tab.isConnected) {
       return { title: 'Invalid Tab', url: '', description: '', hostname: '' };
@@ -114,7 +197,6 @@
     let description = '';
 
     try {
-      // Get URL
       if (browser?.currentURI?.spec) {
         url = browser.currentURI.spec;
         try {
@@ -125,18 +207,15 @@
         }
       }
 
-      // Get title
       title = tab.getAttribute('label') || 
               tab.querySelector('.tab-label, .tab-text')?.textContent || 
               hostname || 'Untitled';
 
-      // Skip internal pages
       if (url.startsWith('about:') || url.startsWith('chrome://')) {
         title = title || 'Internal Page';
         return { title, url, description, hostname };
       }
 
-      // Fetch meta description if enabled
       if (getPref(PREF.FETCH_DESCRIPTIONS, true)) {
         try {
           if (browser?.contentDocument) {
@@ -146,7 +225,6 @@
             }
           }
         } catch (e) {
-          // Cross-origin or permission error - ignore
         }
       }
     } catch (e) {
@@ -266,7 +344,7 @@
           
           if (attempt < maxRetries && (isNetworkError || isTimeout)) {
             const delay = Math.pow(2, attempt) * 1000;
-            log(\`Retry attempt \${attempt + 1}/\${maxRetries} after \${delay}ms\`);
+            log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`);
             await new Promise(resolve => setTimeout(resolve, delay));
           } else {
             throw error;
@@ -276,32 +354,29 @@
       throw lastError;
     }
 
-    /**
-     * Build the prompt for the AI
-     */
     buildPrompt(tabsData, existingGroups = []) {
       const existingGroupsList = existingGroups.length > 0
-        ? existingGroups.map(g => \`- \${g}\`).join('\\n')
+        ? existingGroups.map(g => `- ${g}`).join('\n')
         : 'None';
 
       const tabsList = tabsData.map((data, i) => {
-        const parts = [\`\${i + 1}. Title: "\${data.title}"\`];
+        const parts = [`${i + 1}. Title: "${data.title}"`];
         if (data.url && !data.url.startsWith('about:')) {
-          parts.push(\`   URL: "\${data.url}"\`);
+          parts.push(`   URL: "${data.url}"`);
         }
         if (data.description) {
-          parts.push(\`   Description: "\${data.description}"\`);
+          parts.push(`   Description: "${data.description}"`);
         }
-        return parts.join('\\n');
-      }).join('\\n\\n');
+        return parts.join('\n');
+      }).join('\n\n');
 
-      return \`Analyze the following tabs and assign each to a logical category.
+      return `Analyze the following tabs and assign each to a logical category.
 
 EXISTING CATEGORIES (use these exact names if a tab fits):
-\${existingGroupsList}
+${existingGroupsList}
 
 TABS TO CATEGORIZE:
-\${tabsList}
+${tabsList}
 
 INSTRUCTIONS:
 1. Assign each tab to a concise category (1-3 words, Title Case)
@@ -314,40 +389,33 @@ OUTPUT FORMAT:
 - Output exactly ONE category per line
 - Match the number of tabs above
 - No numbering, no explanations, no extra text
-- Just the category names, one per line\`;
+- Just the category names, one per line`;
     }
 
-    /**
-     * Parse the AI response into categories
-     */
     parseResponse(responseText, tabsCount) {
       const lines = responseText
-        .split('\\n')
+        .split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0 && !line.startsWith('#'));
 
-      // Clean up category names
       const categories = lines.map(line => {
-        // Remove numbering, quotes, markdown formatting
         return line
-          .replace(/^[\\d.\\-*\\s]+/, '')
+          .replace(/^[\d.\-*\s]+/, '')
           .replace(/["'*]/g, '')
-          .replace(/^(Category:?\\s*|The category is:?\\s*)/i, '')
+          .replace(/^(Category:?\s*|The category is:?\s*)/i, '')
           .trim();
       }).filter(line => line.length > 0);
 
-      // Handle mismatch in count
       if (categories.length < tabsCount) {
-        log(\`Warning: AI returned \${categories.length} categories for \${tabsCount} tabs. Padding with "Misc".\`);
+        log(`Warning: AI returned ${categories.length} categories for ${tabsCount} tabs. Padding with "Misc".`);
         while (categories.length < tabsCount) {
           categories.push('Misc');
         }
       } else if (categories.length > tabsCount) {
-        log(\`Warning: AI returned \${categories.length} categories for \${tabsCount} tabs. Truncating.\`);
+        log(`Warning: AI returned ${categories.length} categories for ${tabsCount} tabs. Truncating.`);
         categories.length = tabsCount;
       }
 
-      // Title case conversion
       return categories.map(cat => {
         return cat.split(' ')
           .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -356,9 +424,6 @@ OUTPUT FORMAT:
       });
     }
 
-    /**
-     * Make API request based on provider format
-     */
     async makeRequest(prompt) {
       return this.withRetry(async () => {
         return this.withTimeout(this._makeRequestInternal(prompt), 30000);
@@ -377,12 +442,8 @@ OUTPUT FORMAT:
       }
     }
 
-    /**
-     * Parse streaming SSE response
-     */
     parseStreamingResponse(text) {
-      // Handle streaming format: "data: {...}\\n\\ndata: {...}\\n\\ndata: [DONE]"
-      const lines = text.split('\\n');
+      const lines = text.split('\n');
       let fullContent = '';
       
       for (const line of lines) {
@@ -393,12 +454,10 @@ OUTPUT FORMAT:
           
           try {
             const data = JSON.parse(dataStr);
-            // Handle both streaming delta format and regular response format
             const delta = data.choices?.[0]?.delta?.content || 
                          data.choices?.[0]?.message?.content || '';
             fullContent += delta;
           } catch (e) {
-            // Skip invalid JSON lines
           }
         }
       }
@@ -406,18 +465,14 @@ OUTPUT FORMAT:
       return fullContent.trim();
     }
 
-    /**
-     * OpenAI-compatible request (works for OpenAI and custom endpoints)
-     * Handles both streaming and non-streaming responses
-     */
     async openaiRequest(prompt) {
-      const url = \`\${this.config.endpoint}/chat/completions\`;
+      const url = `${this.config.endpoint}/chat/completions`;
       const headers = {
         'Content-Type': 'application/json',
       };
 
       if (this.config.apiKey) {
-        headers['Authorization'] = \`Bearer \${this.config.apiKey}\`;
+        headers['Authorization'] = `Bearer ${this.config.apiKey}`;
       }
 
       const body = {
@@ -448,13 +503,12 @@ OUTPUT FORMAT:
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
         logError('API Error Response:', errorText);
-        throw new Error(\`API Error \${response.status}: \${errorText.substring(0, 200)}\`);
+        throw new Error(`API Error ${response.status}: ${errorText.substring(0, 200)}`);
       }
 
       const responseText = await response.text();
       log('Raw response (first 500 chars):', responseText.substring(0, 500));
 
-      // Check if response is streaming format (starts with "data:")
       if (responseText.trim().startsWith('data:')) {
         log('Detected streaming response format, parsing...');
         const content = this.parseStreamingResponse(responseText);
@@ -464,7 +518,6 @@ OUTPUT FORMAT:
         return content;
       }
 
-      // Parse as regular JSON
       try {
         const data = JSON.parse(responseText);
         const content = data.choices?.[0]?.message?.content;
@@ -475,7 +528,6 @@ OUTPUT FORMAT:
         
         return content.trim();
       } catch (e) {
-        // If JSON parse fails, try to extract content from streaming-like format
         log('JSON parse failed, trying streaming parse:', e.message);
         const content = this.parseStreamingResponse(responseText);
         if (!content) {
@@ -485,11 +537,8 @@ OUTPUT FORMAT:
       }
     }
 
-    /**
-     * Gemini API request
-     */
     async geminiRequest(prompt) {
-      const url = \`https://generativelanguage.googleapis.com/v1beta/models/\${this.config.model}:generateContent?key=\${this.config.apiKey}\`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.config.model}:generateContent?key=${this.config.apiKey}`;
 
       const body = {
         contents: [{
@@ -511,7 +560,7 @@ OUTPUT FORMAT:
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
-        throw new Error(\`Gemini API Error \${response.status}: \${errorText}\`);
+        throw new Error(`Gemini API Error ${response.status}: ${errorText}`);
       }
 
       const data = await response.json();
@@ -524,11 +573,8 @@ OUTPUT FORMAT:
       return content.trim();
     }
 
-    /**
-     * Ollama API request
-     */
     async ollamaRequest(prompt) {
-      const url = \`\${this.config.endpoint}/api/generate\`;
+      const url = `${this.config.endpoint}/api/generate`;
 
       const body = {
         model: this.config.model,
@@ -550,7 +596,7 @@ OUTPUT FORMAT:
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
-        throw new Error(\`Ollama API Error \${response.status}: \${errorText}\`);
+        throw new Error(`Ollama API Error ${response.status}: ${errorText}`);
       }
 
       const data = await response.json();
@@ -563,30 +609,21 @@ OUTPUT FORMAT:
       return content.trim();
     }
 
-    /**
-     * Main method: categorize tabs
-     */
     async categorize(tabs, existingGroups = []) {
-      // Refresh config
       this.cacheConfig();
 
-      // Collect tab data
       const tabsData = await Promise.all(tabs.map(tab => getTabData(tab)));
       log('Tab data collected:', tabsData);
 
-      // Build prompt
       const prompt = this.buildPrompt(tabsData, existingGroups);
       log('Prompt length:', prompt.length);
 
-      // Make request
       const response = await this.makeRequest(prompt);
       log('AI Response:', response);
 
-      // Parse response
       const categories = this.parseResponse(response, tabs.length);
       log('Parsed categories:', categories);
 
-      // Return tab->category mappings
       return tabs.map((tab, i) => ({
         tab,
         category: categories[i]
@@ -603,20 +640,15 @@ OUTPUT FORMAT:
       this.apiClient = new NeuroSortAPIClient();
     }
 
-    /**
-     * Get all existing groups in the current workspace
-     */
     getExistingGroups() {
       const workspaceId = window.gZenWorkspaces?.activeWorkspace;
       const groups = [];
 
-      // Query for tab groups in active workspace
       const selector = workspaceId
-        ? \`tab-group:has(tab[zen-workspace-id="\${workspaceId}"])\`
+        ? `tab-group:has(tab[zen-workspace-id="${workspaceId}"])`
         : 'tab-group';
 
       document.querySelectorAll(selector).forEach(group => {
-        // Skip folders and split-view groups
         if (group.hasAttribute?.('zen-folder') || 
             group.hasAttribute?.('split-view-group')) {
           return;
@@ -631,56 +663,43 @@ OUTPUT FORMAT:
       return groups;
     }
 
-    /**
-     * Find or create a group by name
-     */
     async findOrCreateGroup(category, workspaceId) {
-      // First, try to find existing group with this name
       const safeName = category.replace(/"/g, '\\"');
-      const selector = \`tab-group[label="\${safeName}"]:has(tab[zen-workspace-id="\${workspaceId}"])\`;
+      const selector = `tab-group[label="${safeName}"]:has(tab[zen-workspace-id="${workspaceId}"])`;
       
       let group = document.querySelector(selector);
       
       if (group) {
-        log(\`Found existing group: \${category}\`);
+        log(`Found existing group: ${category}`);
         return group;
       }
 
-      // Create new group
-      log(\`Creating new group: \${category}\`);
+      log(`Creating new group: ${category}`);
       
       group = document.createXULElement('tab-group');
-      group.id = \`neurosort-\${Date.now()}-\${Math.random().toString(36).substring(2, 9)}\`;
+      group.id = `neurosort-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       group.label = category;
       group.color = getNextGroupColor();
 
-      // Find container
       const container = window.gZenWorkspaces?.activeWorkspaceStrip || 
                         gBrowser.tabContainer.querySelector('tabs') ||
                         gBrowser.tabContainer;
 
-      // Insert group
       container.insertBefore(group, container.firstChild);
 
-      // Wait for group to be ready
       await new Promise(resolve => setTimeout(resolve, 50));
 
       return group;
     }
 
-    /**
-     * Add tabs to a group
-     */
     async addTabsToGroup(group, tabs) {
       if (!group || !tabs || tabs.length === 0) return;
 
-      log(\`Adding \${tabs.length} tabs to group: \${group.label}\`);
+      log(`Adding ${tabs.length} tabs to group: ${group.label}`);
 
-      // Use ATG's addTabs method if available
       if (typeof group.addTabs === 'function') {
         group.addTabs(tabs);
       } else {
-        // Fallback: move tabs individually
         for (const tab of tabs) {
           try {
             gBrowser.moveTabToGroup(tab, group);
@@ -690,7 +709,6 @@ OUTPUT FORMAT:
         }
       }
 
-      // Apply favicon color if ATG method available
       await new Promise(resolve => setTimeout(resolve, 100));
       if (typeof group._useFaviconColor === 'function') {
         try {
@@ -701,9 +719,6 @@ OUTPUT FORMAT:
       }
     }
 
-    /**
-     * Main method: organize tabs into groups
-     */
     async organizeTabs(tabs) {
       if (!tabs || tabs.length === 0) {
         log('No tabs to organize');
@@ -713,15 +728,12 @@ OUTPUT FORMAT:
       const minGroupSize = getPref(PREF.MIN_GROUP_SIZE, 2);
       const workspaceId = window.gZenWorkspaces?.activeWorkspace;
 
-      // Get existing groups for context
       const existingGroups = getPref(PREF.USE_EXISTING_GROUPS, true)
         ? this.getExistingGroups()
         : [];
 
-      // Categorize using AI
       const categorizations = await this.apiClient.categorize(tabs, existingGroups);
 
-      // Group tabs by category
       const groups = {};
       for (const { tab, category } of categorizations) {
         if (!groups[category]) {
@@ -730,14 +742,12 @@ OUTPUT FORMAT:
         groups[category].push(tab);
       }
 
-      // Filter out groups that are too small
       const validGroups = Object.entries(groups).filter(
         ([_, tabs]) => tabs.length >= minGroupSize
       );
 
-      log(\`Creating \${validGroups.length} groups (filtered \${Object.keys(groups).length - validGroups.length} small groups)\`);
+      log(`Creating ${validGroups.length} groups (filtered ${Object.keys(groups).length - validGroups.length} small groups)`);
 
-      // Create groups and add tabs
       const createdGroups = [];
       for (const [category, groupTabs] of validGroups) {
         try {
@@ -745,7 +755,7 @@ OUTPUT FORMAT:
           await this.addTabsToGroup(group, groupTabs);
           createdGroups.push({ name: category, tabCount: groupTabs.length });
         } catch (e) {
-          logError(\`Error creating group \${category}:\`, e);
+          logError(`Error creating group ${category}:`, e);
         }
       }
 
@@ -766,13 +776,18 @@ OUTPUT FORMAT:
     constructor(groupManager) {
       this.groupManager = groupManager;
       this.broomButton = null;
+      this.broomIcon = null;
+      this.spinner = null;
       this.isSorting = false;
       this.toastContainer = null;
     }
 
-    /**
-     * Create the broom button SVG icon
-     */
+    createSpinner() {
+      const spinner = document.createElement('div');
+      spinner.className = 'neurosort-spinner';
+      return spinner;
+    }
+
     createBroomIcon() {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('viewBox', '0 0 24 24');
@@ -784,57 +799,88 @@ OUTPUT FORMAT:
       svg.style.width = '16px';
       svg.style.height = '16px';
 
-      // Broom/wrench icon
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', 'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z');
       
       svg.appendChild(path);
+      this.broomIcon = svg;
       return svg;
     }
 
-    /**
-     * Create and inject the broom button
-     */
+    setLoading(loading) {
+      if (!this.broomButton) return;
+
+      if (loading) {
+        if (this.broomIcon && this.broomIcon.parentElement) {
+          this.broomIcon.style.display = 'none';
+        }
+        if (!this.spinner) {
+          this.spinner = this.createSpinner();
+          this.broomButton.appendChild(this.spinner);
+        }
+        this.spinner.style.display = 'block';
+        this.broomButton.classList.add('loading');
+      } else {
+        if (this.spinner) {
+          this.spinner.style.display = 'none';
+        }
+        if (this.broomIcon) {
+          this.broomIcon.style.display = 'block';
+        }
+        this.broomButton.classList.remove('loading');
+      }
+    }
+
+    updateButtonTitle() {
+      if (!this.broomButton) return;
+
+      const shortcut = getPref(PREF.KEYBOARD_SHORTCUT, 'ctrl+shift+t');
+      const shortcutDisplay = formatShortcutForDisplay(shortcut);
+      
+      let title = 'Tidy Tabs with AI';
+      if (shortcutDisplay) {
+        title += ` (${shortcutDisplay})`;
+      }
+      title += '\nCtrl+Shift+Click: Tidy selected tabs';
+      title += '\nAlt+Shift+Click: Tidy ALL tabs';
+      
+      this.broomButton.title = title;
+    }
+
     createBroomButton() {
       if (this.broomButton) {
         return this.broomButton;
       }
 
-      // Create button
       const button = document.createElement('button');
       button.id = 'neurosort-broom';
       button.className = 'neurosort-broom-button';
-      button.title = 'Tidy Tabs with AI';
       button.setAttribute('role', 'button');
 
-      // Add icon
       button.appendChild(this.createBroomIcon());
 
-      // Add click handler
+      this.updateButtonTitle();
+
       button.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.handleTidyClick();
+        this.handleTidyClick(e);
       });
 
       this.broomButton = button;
       return button;
     }
 
-    /**
-     * Find the insertion point for the broom button
-     */
     findInsertionPoint() {
-      // Try multiple selectors for different Zen versions and configurations
       const selectors = [
-        '#zen-workspaces-button',  // Workspace button area
-        '.zen-sidebar-top',         // Sidebar top area
-        '#zen-sidebar',             // Zen sidebar container
-        '.zen-vertical-tabs',       // Zen vertical tabs container
-        '#TabsToolbar',             // Tab toolbar
-        '#tabbrowser-tabs',         // Tab container
-        '#navigator-toolbox',       // Navigator toolbox (fallback)
-        'tabbox',                   // Generic tabbox element
+        '#zen-workspaces-button',
+        '.zen-sidebar-top',
+        '#zen-sidebar',
+        '.zen-vertical-tabs',
+        '#TabsToolbar',
+        '#tabbrowser-tabs',
+        '#navigator-toolbox',
+        'tabbox',
       ];
 
       log('Searching for insertion point, trying selectors:', selectors);
@@ -853,30 +899,23 @@ OUTPUT FORMAT:
       return null;
     }
 
-    /**
-     * Inject the broom button into the DOM with retry mechanism
-     */
     async injectBroomButton(retryCount = 0) {
       if (!getPref(PREF.ENABLED, true)) {
         log('NeuroSort disabled, not injecting button');
         return;
       }
 
-      // Remove existing button if any
       const existing = document.getElementById('neurosort-broom');
       if (existing) {
         existing.remove();
       }
 
-      // Create new button
       const button = this.createBroomButton();
 
-      // Find insertion point
       const insertionPoint = this.findInsertionPoint();
       if (!insertionPoint) {
         log(`Could not find insertion point for broom button (retry ${retryCount}/3)`);
         
-        // Retry with exponential backoff: 500ms, 1500ms (max 3 retries)
         if (retryCount < 3) {
           const delay = retryCount === 0 ? 500 : 1500;
           log(`Retrying injection after ${delay}ms...`);
@@ -888,21 +927,15 @@ OUTPUT FORMAT:
         return;
       }
 
-      // Style the parent for positioning
       if (window.getComputedStyle(insertionPoint).position === 'static') {
         insertionPoint.style.position = 'relative';
       }
 
-      // Insert button
       insertionPoint.appendChild(button);
       log('Broom button injected successfully at:', insertionPoint.id || insertionPoint.className || insertionPoint.tagName);
     }
 
-    /**
-     * Fallback injection when Zen workspaces aren't available
-     */
     injectBroomButtonFallback(button) {
-      // Try to find any suitable container in the browser chrome
       const fallbackContainers = [
         document.querySelector('#browser'),
         document.querySelector('#appcontent'),
@@ -914,7 +947,6 @@ OUTPUT FORMAT:
         if (container) {
           log('Using fallback container:', container.id || container.tagName);
           
-          // Position button in a visible location
           button.style.position = 'fixed';
           button.style.top = '10px';
           button.style.right = '10px';
@@ -930,10 +962,7 @@ OUTPUT FORMAT:
       logError('Could not inject broom button - no suitable container found');
     }
 
-    /**
-     * Handle tidy button click
-     */
-    async handleTidyClick() {
+    async handleTidyClick(event) {
       if (this.isSorting) {
         log('Already sorting, ignoring click');
         return;
@@ -945,7 +974,32 @@ OUTPUT FORMAT:
         return;
       }
 
-      const tabs = this.getUngroupedTabs();
+      const isCtrlShiftClick = event?.ctrlKey && event?.shiftKey;
+      const isAltShiftClick = event?.altKey && event?.shiftKey;
+      
+      let tabs;
+      let mode = 'normal';
+      
+      if (isAltShiftClick) {
+        mode = 'all';
+        tabs = this.getAllTabsForTidy();
+        this.showToast(`Tidying ALL ${tabs.length} tabs...`, 'info');
+      } else if (isCtrlShiftClick) {
+        const selectedTabs = gBrowser.selectedTabs || [];
+        if (selectedTabs.length > 1) {
+          mode = 'selected';
+          tabs = selectedTabs.filter(tab => 
+            tab && !tab.closing && !tab.hidden && !tab.pinned
+          );
+          this.showToast(`Tidying ${tabs.length} selected tabs...`, 'info');
+        } else {
+          mode = 'normal';
+          tabs = this.getUngroupedTabs();
+          this.showToast(`Tidying ${tabs.length} ungrouped tabs...`, 'info');
+        }
+      } else {
+        tabs = this.getUngroupedTabs();
+      }
       
       if (tabs.length < 2) {
         this.showToast('Not enough tabs to tidy', 'info');
@@ -953,14 +1007,27 @@ OUTPUT FORMAT:
       }
 
       this.isSorting = true;
+      this.setLoading(true);
       this.broomButton?.classList.add('sorting');
+      if (mode === 'all') {
+        this.broomButton?.classList.add('neurosort-tidy-all');
+      } else if (mode === 'selected') {
+        this.broomButton?.classList.add('neurosort-tidy-selected');
+      }
       this.setTabsSorting(tabs, true);
 
       try {
         const result = await this.groupManager.organizeTabs(tabs);
         
         if (result.success) {
-          const message = \`Tidied \${tabs.length} tabs into \${result.groupsCreated} groups\`;
+          let message;
+          if (mode === 'all') {
+            message = `Tidied ALL ${tabs.length} tabs into ${result.groupsCreated} groups`;
+          } else if (mode === 'selected') {
+            message = `Tidied ${tabs.length} selected tabs into ${result.groupsCreated} groups`;
+          } else {
+            message = `Tidied ${tabs.length} tabs into ${result.groupsCreated} groups`;
+          }
           this.showToast(message, 'success');
         } else {
           this.showToast(result.reason || 'Nothing to tidy', 'info');
@@ -973,32 +1040,30 @@ OUTPUT FORMAT:
         } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
           errorMessage = 'Network error. Please check your connection.';
         }
-        this.showToast(\`Error: \${errorMessage}\`, 'error');
+        this.showToast(`Error: ${errorMessage}`, 'error');
       } finally {
         this.isSorting = false;
+        this.setLoading(false);
         this.broomButton?.classList.remove('sorting');
+        this.broomButton?.classList.remove('neurosort-tidy-all');
+        this.broomButton?.classList.remove('neurosort-tidy-selected');
         this.setTabsSorting(tabs, false);
       }
     }
 
-    /**
-     * Get all ungrouped tabs in current workspace
-     */
     getUngroupedTabs() {
       const workspaceId = window.gZenWorkspaces?.activeWorkspace;
       const preservePinned = getPref(PREF.PRESERVE_PINNED, true);
+
       const tabs = [];
 
-      // Get all tabs
       const allTabs = gBrowser.tabs;
 
       for (const tab of allTabs) {
-        // Skip pinned tabs if configured
         if (preservePinned && tab.pinned) {
           continue;
         }
 
-        // Skip tabs not in current workspace
         if (workspaceId) {
           const tabWorkspace = tab.getAttribute('zen-workspace-id');
           if (tabWorkspace && tabWorkspace !== workspaceId) {
@@ -1006,18 +1071,15 @@ OUTPUT FORMAT:
           }
         }
 
-        // Skip tabs already in a group
         const group = tab.parentElement?.closest?.('tab-group');
         if (group) {
           continue;
         }
 
-        // Skip hidden tabs
         if (tab.hidden || tab.getAttribute('hidden')) {
           continue;
         }
 
-        // Skip closing tabs
         if (tab.closing) {
           continue;
         }
@@ -1025,13 +1087,43 @@ OUTPUT FORMAT:
         tabs.push(tab);
       }
 
-      log(\`Found \${tabs.length} ungrouped tabs\`);
+      log(`Found ${tabs.length} ungrouped tabs`);
       return tabs;
     }
 
-    /**
-     * Set sorting visual state on tabs
-     */
+    getAllTabsForTidy() {
+      const workspaceId = window.gZenWorkspaces?.activeWorkspace;
+      const preservePinned = getPref(PREF.PRESERVE_PINNED, true);
+
+      const tabs = [];
+
+      for (const tab of gBrowser.tabs) {
+        if (preservePinned && tab.pinned) {
+          continue;
+        }
+
+        if (workspaceId) {
+          const tabWorkspace = tab.getAttribute('zen-workspace-id');
+          if (tabWorkspace && tabWorkspace !== workspaceId) {
+            continue;
+          }
+        }
+
+        if (tab.hidden || tab.getAttribute('hidden')) {
+          continue;
+        }
+
+        if (tab.closing) {
+          continue;
+        }
+
+        tabs.push(tab);
+      }
+
+      log(`Found ${tabs.length} total tabs for tidy-all`);
+      return tabs;
+    }
+
     setTabsSorting(tabs, sorting) {
       for (const tab of tabs) {
         if (sorting) {
@@ -1042,26 +1134,19 @@ OUTPUT FORMAT:
       }
     }
 
-    /**
-     * Show a toast notification
-     */
     showToast(message, type = 'info') {
-      // Create container if needed
       if (!this.toastContainer) {
         this.toastContainer = document.createElement('div');
         this.toastContainer.id = 'neurosort-toast-container';
         document.body.appendChild(this.toastContainer);
       }
 
-      // Create toast
       const toast = document.createElement('div');
-      toast.className = \`neurosort-toast neurosort-toast-\${type}\`;
+      toast.className = `neurosort-toast neurosort-toast-${type}`;
       toast.textContent = message;
 
-      // Add to container
       this.toastContainer.appendChild(toast);
 
-      // Remove after delay
       setTimeout(() => {
         toast.classList.add('neurosort-toast-fade');
         setTimeout(() => toast.remove(), 300);
@@ -1089,12 +1174,10 @@ OUTPUT FORMAT:
 
       log('Starting auto-tidy observer');
 
-      // Observe tab changes
       this.observer = new MutationObserver(() => {
         this.check();
       });
 
-      // Watch for tab additions
       const tabContainer = gBrowser.tabContainer;
       if (tabContainer) {
         this.observer.observe(tabContainer, {
@@ -1103,7 +1186,6 @@ OUTPUT FORMAT:
         });
       }
 
-      // Initial check
       this.check();
     }
 
@@ -1129,16 +1211,14 @@ OUTPUT FORMAT:
       
       const ungroupedCount = this.ui.getUngroupedTabs().length;
 
-      log(\`Auto-tidy check: \${ungroupedCount} ungrouped tabs (threshold: \${threshold})\`);
+      log(`Auto-tidy check: ${ungroupedCount} ungrouped tabs (threshold: ${threshold})`);
 
       if (ungroupedCount >= threshold) {
         log('Triggering auto-tidy');
         this.cooldown = true;
 
-        // Trigger tidy
         this.ui.handleTidyClick();
 
-        // Set cooldown
         setTimeout(() => {
           this.cooldown = false;
         }, cooldownSeconds * 1000);
@@ -1163,33 +1243,44 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.0.3...');
+      console.log('[NeuroSort] Initializing v1.0.4...');
 
-      // Wait for dependencies
       await this.waitForDependencies();
 
-      // Inject styles
       this.injectStyles();
 
-      // Inject UI
       this.ui.injectBroomButton();
 
-      // Start auto-tidy observer
+      this.setupKeyboardShortcut();
+
       this.autoTidy = new AutoTidyObserver(this.ui);
       this.autoTidy.start();
 
-      // Listen for preference changes
       this.setupPreferenceListener();
 
-      // Mark initialized
       this.initialized = true;
       console.log('[NeuroSort] Initialized successfully');
+    }
+
+    setupKeyboardShortcut() {
+      window.addEventListener('keydown', (e) => {
+        if (this.ui.isSorting) return;
+
+        const shortcut = getPref(PREF.KEYBOARD_SHORTCUT, 'ctrl+shift+t');
+        if (!shortcut) return;
+
+        if (matchesKeyboardEvent(shortcut, e)) {
+          e.preventDefault();
+          e.stopPropagation();
+          log('Keyboard shortcut triggered:', shortcut);
+          this.ui.handleTidyClick();
+        }
+      }, true);
     }
 
     async waitForDependencies() {
       return new Promise((resolve) => {
         const check = () => {
-          // Wait for gBrowser and basic tab functionality
           if (window.gBrowser && window.gBrowser.tabs) {
             resolve();
           } else {
@@ -1201,14 +1292,13 @@ OUTPUT FORMAT:
     }
 
     injectStyles() {
-      // Check if styles already injected
       if (document.getElementById('neurosort-styles')) {
         return;
       }
 
       const style = document.createElement('style');
       style.id = 'neurosort-styles';
-      style.textContent = \`
+      style.textContent = `
         /* Broom Button Styles */
         #neurosort-broom {
           position: absolute;
@@ -1240,6 +1330,33 @@ OUTPUT FORMAT:
         #neurosort-broom.sorting {
           opacity: 1;
           animation: neurosort-pulse 1s ease-in-out infinite;
+        }
+
+        #neurosort-broom.loading {
+          opacity: 1;
+        }
+
+        #neurosort-broom.neurosort-tidy-all {
+          border: 2px solid #f59e0b;
+          box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+        }
+
+        #neurosort-broom.neurosort-tidy-selected {
+          border: 2px solid #8b5cf6;
+          box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
+        }
+
+        .neurosort-spinner {
+          width: 16px;
+          height: 16px;
+          border: 2px solid var(--zen-text-secondary, #888);
+          border-top-color: transparent;
+          border-radius: 50%;
+          animation: neurosort-spin 0.8s linear infinite;
+        }
+
+        @keyframes neurosort-spin {
+          to { transform: rotate(360deg); }
         }
 
         @keyframes neurosort-pulse {
@@ -1340,14 +1457,13 @@ OUTPUT FORMAT:
             color: var(--zen-text-primary, #eee);
           }
         }
-      \`;
+      `;
 
       document.head.appendChild(style);
       log('Styles injected');
     }
 
     setupPreferenceListener() {
-      // Re-inject button when preferences change
       Services.prefs.addObserver(PREF.ENABLED, () => {
         log('Preference changed, re-initializing');
         this.ui.injectBroomButton();
@@ -1360,6 +1476,11 @@ OUTPUT FORMAT:
           this.autoTidy?.stop();
         }
       });
+
+      Services.prefs.addObserver(PREF.KEYBOARD_SHORTCUT, () => {
+        log('Keyboard shortcut preference changed');
+        this.ui.updateButtonTitle();
+      });
     }
   }
 
@@ -1367,20 +1488,17 @@ OUTPUT FORMAT:
   // INITIALIZATION
   // ============================================================================
 
-  // Create and initialize when DOM is ready
   const neurosort = new NeuroSort();
 
-  // Wait for window load
   if (document.readyState === 'complete') {
     neurosort.init();
   } else {
     window.addEventListener('load', () => neurosort.init(), { once: true });
   }
 
-  // Also try after a delay as backup
   setTimeout(() => neurosort.init(), 1000);
   setTimeout(() => neurosort.init(), 3000);
 
-  console.log('[NeuroSort] Script loaded v1.0.3');
+  console.log('[NeuroSort] Script loaded v1.0.4');
 
 })();

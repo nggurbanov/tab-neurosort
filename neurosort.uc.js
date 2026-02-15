@@ -44,6 +44,9 @@
 
     // Keyboard Shortcut
     KEYBOARD_SHORTCUT: 'extensions.neurosort.keyboard_shortcut',
+
+    // Setup
+    SETUP_COMPLETE: 'extensions.neurosort.setup_complete',
   };
 
   // ============================================================================
@@ -1696,6 +1699,471 @@ createContextMenu() {
   }
 
   // ============================================================================
+  // WELCOME MODAL
+  // ============================================================================
+
+  class WelcomeModal {
+    constructor() {
+      this.modal = null;
+      this.overlay = null;
+      this.selectedProvider = 'openai';
+    }
+
+    show() {
+      if (this.modal) return;
+      
+      this.createModal();
+      document.body.appendChild(this.overlay);
+      document.body.appendChild(this.modal);
+      
+      requestAnimationFrame(() => {
+        this.modal.classList.add('neurosort-welcome-visible');
+        this.overlay.classList.add('neurosort-overlay-visible');
+      });
+    }
+
+    createModal() {
+      this.overlay = document.createElement('div');
+      this.overlay.id = 'neurosort-welcome-overlay';
+      this.overlay.className = 'neurosort-welcome-overlay';
+      this.overlay.addEventListener('click', () => this.dismiss());
+
+      this.modal = document.createElement('div');
+      this.modal.id = 'neurosort-welcome-modal';
+      this.modal.className = 'neurosort-welcome-modal';
+      this.modal.innerHTML = `
+        <button class="neurosort-welcome-close" title="Close">&times;</button>
+        <div class="neurosort-welcome-header">
+          <div class="neurosort-welcome-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+          </div>
+          <h1>Welcome to NeuroSort</h1>
+          <p class="neurosort-welcome-subtitle">AI-powered tab organization for Zen Browser</p>
+        </div>
+        
+        <div class="neurosort-welcome-content">
+          <p class="neurosort-welcome-description">
+            NeuroSort uses AI to automatically organize your tabs into logical groups.
+            Select your preferred AI provider to get started.
+          </p>
+          
+          <div class="neurosort-welcome-field">
+            <label for="neurosort-provider-select">AI Provider</label>
+            <select id="neurosort-provider-select" class="neurosort-welcome-select">
+              <option value="openai">OpenAI</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="ollama">Ollama (Local)</option>
+              <option value="custom">Custom Endpoint</option>
+            </select>
+          </div>
+          
+          <div id="neurosort-provider-config" class="neurosort-provider-config">
+            <!-- Provider-specific fields will be inserted here -->
+          </div>
+          
+          <div class="neurosort-welcome-links">
+            <a href="https://github.com/neurosort/docs" target="_blank" rel="noopener" class="neurosort-welcome-link">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+              Documentation
+            </a>
+          </div>
+        </div>
+        
+        <div class="neurosort-welcome-footer">
+          <button id="neurosort-get-started" class="neurosort-welcome-button">
+            Get Started
+          </button>
+        </div>
+      `;
+
+      this.modal.querySelector('.neurosort-welcome-close').addEventListener('click', () => this.dismiss());
+      this.modal.querySelector('#neurosort-provider-select').addEventListener('change', (e) => {
+        this.selectedProvider = e.target.value;
+        this.updateProviderConfig();
+      });
+      this.modal.querySelector('#neurosort-get-started').addEventListener('click', () => this.saveAndClose());
+
+      this.updateProviderConfig();
+    }
+
+    updateProviderConfig() {
+      const configContainer = this.modal.querySelector('#neurosort-provider-config');
+      
+      const configs = {
+        openai: `
+          <div class="neurosort-welcome-field">
+            <label for="neurosort-openai-key">API Key</label>
+            <input type="password" id="neurosort-openai-key" class="neurosort-welcome-input" 
+                   placeholder="sk-..." autocomplete="off">
+          </div>
+          <div class="neurosort-welcome-field">
+            <label for="neurosort-openai-model">Model</label>
+            <input type="text" id="neurosort-openai-model" class="neurosort-welcome-input" 
+                   value="gpt-4o-mini" placeholder="gpt-4o-mini">
+          </div>
+        `,
+        gemini: `
+          <div class="neurosort-welcome-field">
+            <label for="neurosort-gemini-key">API Key</label>
+            <input type="password" id="neurosort-gemini-key" class="neurosort-welcome-input" 
+                   placeholder="AIza..." autocomplete="off">
+          </div>
+          <div class="neurosort-welcome-field">
+            <label for="neurosort-gemini-model">Model</label>
+            <input type="text" id="neurosort-gemini-model" class="neurosort-welcome-input" 
+                   value="gemini-2.0-flash" placeholder="gemini-2.0-flash">
+          </div>
+        `,
+        ollama: `
+          <div class="neurosort-welcome-field">
+            <label for="neurosort-ollama-endpoint">Endpoint</label>
+            <input type="text" id="neurosort-ollama-endpoint" class="neurosort-welcome-input" 
+                   value="http://localhost:11434" placeholder="http://localhost:11434">
+          </div>
+          <div class="neurosort-welcome-field">
+            <label for="neurosort-ollama-model">Model</label>
+            <input type="text" id="neurosort-ollama-model" class="neurosort-welcome-input" 
+                   value="llama3.2" placeholder="llama3.2">
+          </div>
+          <p class="neurosort-welcome-hint">Make sure Ollama is running locally with the specified model.</p>
+        `,
+        custom: `
+          <div class="neurosort-welcome-field">
+            <label for="neurosort-custom-endpoint">Endpoint</label>
+            <input type="text" id="neurosort-custom-endpoint" class="neurosort-welcome-input" 
+                   value="" placeholder="https://api.example.com/v1">
+          </div>
+          <div class="neurosort-welcome-field">
+            <label for="neurosort-custom-key">API Key</label>
+            <input type="password" id="neurosort-custom-key" class="neurosort-welcome-input" 
+                   placeholder="Your API key" autocomplete="off">
+          </div>
+          <div class="neurosort-welcome-field">
+            <label for="neurosort-custom-model">Model</label>
+            <input type="text" id="neurosort-custom-model" class="neurosort-welcome-input" 
+                   value="" placeholder="model-name">
+          </div>
+        `
+      };
+
+      configContainer.innerHTML = configs[this.selectedProvider] || '';
+    }
+
+    saveAndClose() {
+      this.savePreferences();
+      
+      try {
+        Services.prefs.setBoolPref(PREF.SETUP_COMPLETE, true);
+      } catch (e) {
+        logError('Failed to save setup_complete preference:', e);
+      }
+
+      this.dismiss();
+
+      setTimeout(() => {
+        const toastContainer = document.getElementById('neurosort-toast-container');
+        if (!toastContainer) {
+          const container = document.createElement('div');
+          container.id = 'neurosort-toast-container';
+          document.body.appendChild(container);
+        }
+        
+        const toast = document.createElement('div');
+        toast.className = 'neurosort-toast neurosort-toast-success';
+        toast.textContent = 'NeuroSort is ready! Click the broom icon to organize your tabs.';
+        document.getElementById('neurosort-toast-container').appendChild(toast);
+        
+        setTimeout(() => {
+          toast.classList.add('neurosort-toast-fade');
+          setTimeout(() => toast.remove(), 300);
+        }, 4000);
+      }, 300);
+    }
+
+    savePreferences() {
+      try {
+        Services.prefs.setStringPref(PREF.PROVIDER, this.selectedProvider);
+
+        switch (this.selectedProvider) {
+          case 'openai': {
+            const key = this.modal.querySelector('#neurosort-openai-key')?.value?.trim();
+            const model = this.modal.querySelector('#neurosort-openai-model')?.value?.trim();
+            if (key) Services.prefs.setStringPref(PREF.OPENAI_API_KEY, key);
+            if (model) Services.prefs.setStringPref(PREF.OPENAI_MODEL, model);
+            break;
+          }
+          case 'gemini': {
+            const key = this.modal.querySelector('#neurosort-gemini-key')?.value?.trim();
+            const model = this.modal.querySelector('#neurosort-gemini-model')?.value?.trim();
+            if (key) Services.prefs.setStringPref(PREF.GEMINI_API_KEY, key);
+            if (model) Services.prefs.setStringPref(PREF.GEMINI_MODEL, model);
+            break;
+          }
+          case 'ollama': {
+            const endpoint = this.modal.querySelector('#neurosort-ollama-endpoint')?.value?.trim();
+            const model = this.modal.querySelector('#neurosort-ollama-model')?.value?.trim();
+            if (endpoint) Services.prefs.setStringPref(PREF.OLLAMA_ENDPOINT, endpoint);
+            if (model) Services.prefs.setStringPref(PREF.OLLAMA_MODEL, model);
+            break;
+          }
+          case 'custom': {
+            const endpoint = this.modal.querySelector('#neurosort-custom-endpoint')?.value?.trim();
+            const key = this.modal.querySelector('#neurosort-custom-key')?.value?.trim();
+            const model = this.modal.querySelector('#neurosort-custom-model')?.value?.trim();
+            if (endpoint) Services.prefs.setStringPref(PREF.CUSTOM_ENDPOINT, endpoint);
+            if (key) Services.prefs.setStringPref(PREF.CUSTOM_API_KEY, key);
+            if (model) Services.prefs.setStringPref(PREF.CUSTOM_MODEL, model);
+            break;
+          }
+        }
+
+        log('Welcome modal preferences saved for provider:', this.selectedProvider);
+      } catch (e) {
+        logError('Failed to save preferences:', e);
+      }
+    }
+
+    dismiss() {
+      this.modal?.classList.remove('neurosort-welcome-visible');
+      this.overlay?.classList.remove('neurosort-overlay-visible');
+      
+      setTimeout(() => {
+        this.modal?.remove();
+        this.overlay?.remove();
+        this.modal = null;
+        this.overlay = null;
+      }, 300);
+    }
+
+    injectStyles() {
+      if (document.getElementById('neurosort-welcome-styles')) return;
+
+      const style = document.createElement('style');
+      style.id = 'neurosort-welcome-styles';
+      style.textContent = `
+        .neurosort-welcome-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(4px);
+          z-index: 999998;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+
+        .neurosort-overlay-visible {
+          opacity: 1;
+        }
+
+        .neurosort-welcome-modal {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%) scale(0.95);
+          background: var(--zen-bgcolor, #1a1a1a);
+          border: 1px solid var(--zen-border, #333);
+          border-radius: 16px;
+          padding: 0;
+          width: 420px;
+          max-width: 90vw;
+          max-height: 85vh;
+          overflow: hidden;
+          z-index: 999999;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+          opacity: 0;
+          transition: opacity 0.3s ease, transform 0.3s ease;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          color: var(--zen-text-primary, #fff);
+        }
+
+        .neurosort-welcome-visible {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1);
+        }
+
+        .neurosort-welcome-close {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          width: 28px;
+          height: 28px;
+          border: none;
+          background: transparent;
+          color: var(--zen-text-secondary, #888);
+          font-size: 20px;
+          cursor: pointer;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.2s ease, color 0.2s ease;
+        }
+
+        .neurosort-welcome-close:hover {
+          background: var(--zen-button-hover-bg, rgba(255,255,255,0.1));
+          color: var(--zen-text-primary, #fff);
+        }
+
+        .neurosort-welcome-header {
+          padding: 24px 24px 16px;
+          text-align: center;
+          border-bottom: 1px solid var(--zen-border, #333);
+        }
+
+        .neurosort-welcome-icon {
+          width: 56px;
+          height: 56px;
+          margin: 0 auto 12px;
+          background: linear-gradient(135deg, #8b5cf6, #6366f1);
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .neurosort-welcome-icon svg {
+          width: 28px;
+          height: 28px;
+          color: #fff;
+        }
+
+        .neurosort-welcome-header h1 {
+          margin: 0 0 8px;
+          font-size: 22px;
+          font-weight: 600;
+          color: var(--zen-text-primary, #fff);
+        }
+
+        .neurosort-welcome-subtitle {
+          margin: 0;
+          font-size: 14px;
+          color: var(--zen-text-secondary, #888);
+        }
+
+        .neurosort-welcome-content {
+          padding: 20px 24px;
+        }
+
+        .neurosort-welcome-description {
+          margin: 0 0 20px;
+          font-size: 14px;
+          line-height: 1.5;
+          color: var(--zen-text-secondary, #aaa);
+        }
+
+        .neurosort-welcome-field {
+          margin-bottom: 16px;
+        }
+
+        .neurosort-welcome-field label {
+          display: block;
+          margin-bottom: 6px;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--zen-text-secondary, #bbb);
+        }
+
+        .neurosort-welcome-input,
+        .neurosort-welcome-select {
+          width: 100%;
+          padding: 10px 12px;
+          border: 1px solid var(--zen-border, #444);
+          border-radius: 8px;
+          background: var(--zen-input-bg, rgba(0, 0, 0, 0.3));
+          color: var(--zen-text-primary, #fff);
+          font-size: 14px;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
+          box-sizing: border-box;
+        }
+
+        .neurosort-welcome-input:focus,
+        .neurosort-welcome-select:focus {
+          outline: none;
+          border-color: #8b5cf6;
+          box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+        }
+
+        .neurosort-welcome-input::placeholder {
+          color: var(--zen-text-secondary, #666);
+        }
+
+        .neurosort-welcome-hint {
+          margin: 8px 0 0;
+          font-size: 12px;
+          color: var(--zen-text-secondary, #888);
+          font-style: italic;
+        }
+
+        .neurosort-welcome-links {
+          margin-top: 16px;
+          padding-top: 16px;
+          border-top: 1px solid var(--zen-border, #333);
+        }
+
+        .neurosort-welcome-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          color: #8b5cf6;
+          text-decoration: none;
+          font-size: 13px;
+          transition: color 0.2s ease;
+        }
+
+        .neurosort-welcome-link:hover {
+          color: #a78bfa;
+        }
+
+        .neurosort-welcome-footer {
+          padding: 16px 24px 24px;
+        }
+
+        .neurosort-welcome-button {
+          width: 100%;
+          padding: 12px 24px;
+          border: none;
+          border-radius: 10px;
+          background: linear-gradient(135deg, #8b5cf6, #6366f1);
+          color: #fff;
+          font-size: 15px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .neurosort-welcome-button:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+        }
+
+        .neurosort-welcome-button:active {
+          transform: translateY(0);
+        }
+
+        .neurosort-provider-config {
+          animation: neurosort-fade-in 0.2s ease;
+        }
+
+        @keyframes neurosort-fade-in {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `;
+
+      document.head.appendChild(style);
+    }
+  }
+
+  // ============================================================================
   // AUTO-TIDY OBSERVER
   // ============================================================================
 
@@ -1777,6 +2245,7 @@ createContextMenu() {
       this.ui = new NeuroSortUI(this.groupManager);
       this.autoTidy = null;
       this.initialized = false;
+      this.welcomeModal = new WelcomeModal();
     }
 
     async init() {
@@ -1790,6 +2259,9 @@ createContextMenu() {
 
       this.injectStyles();
 
+      this.welcomeModal.injectStyles();
+      this.checkFirstTimeSetup();
+
       this.ui.injectBroomButton();
 
       this.setupKeyboardShortcut();
@@ -1801,6 +2273,14 @@ createContextMenu() {
 
       this.initialized = true;
       console.log('[NeuroSort] Initialized successfully');
+    }
+
+    checkFirstTimeSetup() {
+      const setupComplete = getPref(PREF.SETUP_COMPLETE, false);
+      if (!setupComplete) {
+        log('First-time user detected, showing welcome modal');
+        setTimeout(() => this.welcomeModal.show(), 500);
+      }
     }
 
     setupKeyboardShortcut() {

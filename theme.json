@@ -13,7 +13,6 @@
         "chrome": "userChrome.css"
     },
     "homepage": "https://github.com/nggurbanov/tab-neurosort",
-    "image": "https://raw.githubusercontent.com/nggurbanov/tab-neurosort/main/image.png",
     "preferences": "https://raw.githubusercontent.com/nggurbanov/tab-neurosort/main/preferences.json",
     "readme": "https://raw.githubusercontent.com/nggurbanov/tab-neurosort/main/README.md",
     "author": "Tyrell",
@@ -26,5 +25,7 @@
     ],
     "createdAt": "2025-02-15",
     "updatedAt": "2025-02-15",
-    "fork": ["zen"]
+    "fork": [
+        "zen"
+    ]
 }

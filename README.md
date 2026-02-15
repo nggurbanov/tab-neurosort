@@ -64,12 +64,29 @@ NeuroSort automatically organizes your tabs into smart groups using OpenAI-compa
 
 ## ✨ Features
 
+### Core Features
 - 🧹 **Arc-style Broom Button** - Click to tidy all ungrouped tabs
 - 🤖 **Multi-Provider AI Support** - OpenAI, Google Gemini, Ollama (local), or any custom endpoint
 - 🔄 **Auto-Tidy** - Automatically organize when tabs exceed a threshold
 - 🎨 **Advanced Tab Groups Integration** - Works with [Advanced Tab Groups](https://github.com/Vertex-Mods/Advanced-Tab-Groups)
 - 📝 **Smart Context** - Fetches page descriptions for better categorization
 - 🎯 **Existing Group Awareness** - AI prefers existing group names
+
+### User Experience
+- 🎬 **Welcome/Setup Screen** - First-time users see a guided setup wizard
+- 📋 **Context Menu** - Right-click the broom button for more options
+- ↩️ **Undo** - Ctrl/Cmd+Z to undo the last sort operation
+- 🔢 **Multi-Select Sorting** - Ctrl+Shift+Click to sort only selected tabs
+- 🧹 **Tidy All** - Alt+Shift+Click to sort all tabs (including grouped)
+- ⚙️ **Quick Settings** - Quick settings popup accessible from context menu
+- 🔔 **Status Badge** - Shows ungrouped tabs count on the broom button
+- ⌨️ **Keyboard Shortcut** - Configurable global shortcut (default Ctrl+Shift+T)
+- 📊 **Group Stats** - View group statistics in the context menu
+
+### Reliability
+- 🛡️ **Fallback Categorization** - Domain-based fallback when API fails
+- ⏱️ **Rate Limiting** - Protection against API spam
+- ⏳ **Loading Indicator** - Spinner animation during sorting operations
 
 ---
 
@@ -127,18 +144,42 @@ Works with:
 3. Click the 🧹 broom icon
 4. Tabs are automatically organized into logical groups
 
+### Context Menu
+
+Right-click the broom button to access:
+- **Sort Ungrouped Tabs** - Organize only ungrouped tabs
+- **Sort All Tabs** - Reorganize all tabs (including grouped)
+- **Sort Selected Tabs** - Organize only selected tabs
+- **Undo Last Sort** - Revert the previous sort operation
+- **Quick Settings** - Adjust common settings without opening preferences
+- **Group Stats** - View current tab group statistics
+
+### Multi-Select Sorting
+
+To sort specific tabs:
+1. Select tabs using Ctrl/Cmd + click
+2. Ctrl+Shift+Click the broom button
+3. Only selected tabs will be organized
+
+### Tidy All Tabs
+
+To reorganize all tabs (including already grouped):
+- Alt+Shift+Click the broom button
+
 ### Auto-Tidy
 
 1. Enable "Auto-tidy when ungrouped tabs exceed threshold"
 2. Set threshold (default: 6 tabs)
 3. Tabs will automatically organize when threshold is exceeded
 
-### Selective Sorting
+### Undo
 
-To sort specific tabs:
-1. Multi-select tabs (Ctrl/Cmd + click)
-2. Click the broom button
-3. Only selected tabs will be organized
+- Press **Ctrl/Cmd+Z** to undo the last sort operation
+- Or use **Undo Last Sort** from the context menu
+
+### Status Badge
+
+The broom button displays a badge showing the count of ungrouped tabs, giving you quick visibility into how many tabs need organizing.
 
 ---
 
@@ -155,7 +196,24 @@ To sort specific tabs:
 | Preserve pinned tabs | Never group pinned tabs | `true` |
 | Use existing groups | Prefer existing group names | `true` |
 | Fetch descriptions | Get meta descriptions for context | `true` |
+| Keyboard shortcut | Global shortcut for sorting | `Ctrl+Shift+T` |
+| Show status badge | Display ungrouped tab count | `true` |
+| Enable fallback | Use domain-based fallback on API failure | `true` |
+| Rate limit cooldown | Seconds between API calls | `5` |
 | Debug mode | Log to browser console | `false` |
+
+---
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Shift+T` (Windows/Linux) | Sort ungrouped tabs (configurable) |
+| `Cmd+Shift+T` (macOS) | Sort ungrouped tabs (configurable) |
+| `Ctrl/Cmd+Z` | Undo last sort operation |
+| `Ctrl+Shift+Click` | Sort selected tabs only |
+| `Alt+Shift+Click` | Sort all tabs (including grouped) |
+| Right-click broom | Open context menu |
 
 ---
 
@@ -188,6 +246,33 @@ Sine blocks scripts from GitHub by default. The script won't load at all without
 2. **Network Error**: Verify endpoint URL is correct
 3. **Timeout**: Large tab counts may take longer; try smaller batches
 4. **Invalid endpoint**: Make sure the URL includes the API version (e.g., `/v1` for OpenAI-compatible)
+5. **Rate Limited**: Wait a few seconds between sort operations; adjust rate limit cooldown in preferences
+
+### Fallback Categorization Used
+
+If you see "Using fallback categorization" in the console or groups don't look AI-generated:
+
+1. Check your API key is valid
+2. Verify the API endpoint is reachable
+3. Check the browser console for error details
+4. The fallback uses domain-based grouping which is less accurate than AI
+
+### Undo Not Working
+
+1. Undo only works for the most recent sort operation
+2. Undo history is not persisted across browser sessions
+3. If you've closed tabs or groups, undo may not fully restore the previous state
+
+### Keyboard Shortcut Not Working
+
+1. Check if another extension is using the same shortcut
+2. Verify the shortcut is configured in preferences
+3. Try changing to a different key combination
+
+### Status Badge Not Showing
+
+1. Enable "Show status badge" in preferences
+2. If count shows "0", all tabs are already grouped
 
 ### Groups Not Created
 

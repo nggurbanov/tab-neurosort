@@ -2,7 +2,8 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.0.4 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.0 - NeuroSort - AI-powered tab organization for Zen Browser
+// Features: Undo support (Ctrl/Cmd+Z), context menu, history of last 5 sorts
 (() => {
   'use strict';
 
@@ -180,6 +181,49 @@
     colorIndex++;
     return color;
   };
+
+  const generateTabId = (tab) => {
+    return tab.linkedBrowser?.browserId || 
+           tab.getAttribute('tabbrowser-tab') ||
+           `tab-${Array.from(gBrowser.tabs).indexOf(tab)}-${Date.now()}`;
+  };
+
+  class SortHistory {
+    constructor(maxSize = 5) {
+      this.history = [];
+      this.maxSize = maxSize;
+    }
+
+    push(entry) {
+      this.history.push(entry);
+      if (this.history.length > this.maxSize) {
+        this.history.shift();
+      }
+      log('Sort history pushed, size:', this.history.length);
+    }
+
+    pop() {
+      return this.history.pop();
+    }
+
+    peek() {
+      return this.history.length > 0 ? this.history[this.history.length - 1] : null;
+    }
+
+    isEmpty() {
+      return this.history.length === 0;
+    }
+
+    clear() {
+      this.history = [];
+    }
+
+    getLength() {
+      return this.history.length;
+    }
+  }
+
+  const sortHistory = new SortHistory(5);
 
   // ============================================================================
   // TAB DATA COLLECTION
@@ -748,23 +792,122 @@ OUTPUT FORMAT:
 
       log(`Creating ${validGroups.length} groups (filtered ${Object.keys(groups).length - validGroups.length} small groups)`);
 
+      const undoEntry = {
+        timestamp: Date.now(),
+        groupMappings: [],
+        createdGroupIds: [],
+        tabsSorted: tabs.length
+      };
+
       const createdGroups = [];
       for (const [category, groupTabs] of validGroups) {
         try {
           const group = await this.findOrCreateGroup(category, workspaceId);
           await this.addTabsToGroup(group, groupTabs);
+          
+          undoEntry.createdGroupIds.push(group.id);
+          const tabIds = groupTabs.map(tab => ({
+            tab: tab,
+            tabId: generateTabId(tab),
+            originalIndex: Array.from(gBrowser.tabs).indexOf(tab),
+            originalParent: tab.parentElement
+          }));
+          undoEntry.groupMappings.push({
+            groupId: group.id,
+            groupName: category,
+            tabs: tabIds
+          });
+          
           createdGroups.push({ name: category, tabCount: groupTabs.length });
         } catch (e) {
           logError(`Error creating group ${category}:`, e);
         }
       }
 
+      sortHistory.push(undoEntry);
+
       return {
         success: true,
         groupsCreated: createdGroups.length,
         groups: createdGroups,
-        ungrouped: tabs.length - validGroups.reduce((sum, [_, t]) => sum + t.length, 0)
+        ungrouped: tabs.length - validGroups.reduce((sum, [_, t]) => sum + t.length, 0),
+        undoEntry
       };
+    }
+
+    async undoLastSort() {
+      const entry = sortHistory.pop();
+      
+      if (!entry) {
+        return { success: false, reason: 'Nothing to undo' };
+      }
+
+      log('Undoing sort from:', new Date(entry.timestamp));
+      
+      let tabsUngrouped = 0;
+      let groupsRemoved = 0;
+      const errors = [];
+
+      for (const mapping of entry.groupMappings) {
+        const group = document.getElementById(mapping.groupId) || 
+                      document.querySelector(`tab-group[id="${mapping.groupId}"]`);
+        
+        if (!group) {
+          log('Group not found:', mapping.groupId);
+          continue;
+        }
+
+        const tabsToUngroup = [];
+        for (const tabInfo of mapping.tabs) {
+          let tab = tabInfo.tab;
+          
+          if (!tab || tab.closing || !tab.parentNode) {
+            const allTabs = Array.from(gBrowser.tabs);
+            tab = allTabs.find(t => generateTabId(t) === tabInfo.tabId);
+          }
+          
+          if (tab && !tab.closing && tab.parentNode) {
+            tabsToUngroup.push({ tab, originalIndex: tabInfo.originalIndex });
+          }
+        }
+
+        for (const { tab, originalIndex } of tabsToUngroup) {
+          try {
+            if (typeof gBrowser.ungroupTab === 'function') {
+              gBrowser.ungroupTab(tab);
+            } else if (typeof tab.ungroup === 'function') {
+              tab.ungroup();
+            } else {
+              const tabContainer = gBrowser.tabContainer;
+              tabContainer.appendChild(tab);
+            }
+            tabsUngrouped++;
+          } catch (e) {
+            logError('Error ungrouping tab:', e);
+            errors.push(e.message);
+          }
+        }
+
+        try {
+          const remainingTabs = group.querySelectorAll('tab');
+          if (remainingTabs.length === 0) {
+            group.remove();
+            groupsRemoved++;
+          }
+        } catch (e) {
+          logError('Error removing group:', e);
+        }
+      }
+
+      const result = {
+        success: true,
+        tabsUngrouped,
+        groupsRemoved,
+        errors: errors.length > 0 ? errors : undefined
+      };
+
+      log('Undo complete:', result);
+      return result;
     }
   }
 
@@ -780,6 +923,7 @@ OUTPUT FORMAT:
       this.spinner = null;
       this.isSorting = false;
       this.toastContainer = null;
+      this.contextMenu = null;
     }
 
     createSpinner() {
@@ -843,8 +987,121 @@ OUTPUT FORMAT:
       }
       title += '\nCtrl+Shift+Click: Tidy selected tabs';
       title += '\nAlt+Shift+Click: Tidy ALL tabs';
+      title += '\nRight-click: Options menu';
       
       this.broomButton.title = title;
+    }
+
+    createContextMenu() {
+      if (this.contextMenu) {
+        return this.contextMenu;
+      }
+
+      const menu = document.createElement('menupopup');
+      menu.id = 'neurosort-context-menu';
+      menu.className = 'neurosort-menu';
+
+      const tidyItem = document.createXULElement('menuitem');
+      tidyItem.label = 'Tidy Tabs';
+      tidyItem.className = 'neurosort-menu-item';
+      tidyItem.addEventListener('command', () => {
+        this.handleTidyClick({ ctrlKey: false, shiftKey: false, altKey: false });
+      });
+      menu.appendChild(tidyItem);
+
+      const tidySelectedLabel = `Tidy Selected Tabs (${formatShortcutForDisplay('ctrl+shift+click')})`;
+      const tidySelected = document.createXULElement('menuitem');
+      tidySelected.label = tidySelectedLabel;
+      tidySelected.className = 'neurosort-menu-item';
+      tidySelected.addEventListener('command', () => {
+        const selectedTabs = gBrowser.selectedTabs || [];
+        if (selectedTabs.length > 1) {
+          this.handleTidyClick({ ctrlKey: true, shiftKey: true, altKey: false });
+        } else {
+          this.showToast('Select multiple tabs first (Ctrl+Click)', 'info');
+        }
+      });
+      menu.appendChild(tidySelected);
+
+      const tidyAll = document.createXULElement('menuitem');
+      tidyAll.label = 'Tidy ALL Tabs';
+      tidyAll.className = 'neurosort-menu-item';
+      tidyAll.addEventListener('command', () => {
+        this.handleTidyClick({ ctrlKey: false, shiftKey: true, altKey: true });
+      });
+      menu.appendChild(tidyAll);
+
+      menu.appendChild(document.createXULElement('menuseparator'));
+
+      const undoItem = document.createXULElement('menuitem');
+      undoItem.id = 'neurosort-undo-menu-item';
+      undoItem.label = 'Undo Last Sort (Ctrl/Cmd+Z)';
+      undoItem.className = 'neurosort-menu-item';
+      undoItem.addEventListener('command', () => {
+        this.handleUndo();
+      });
+      menu.appendChild(undoItem);
+
+      const clearHistory = document.createXULElement('menuitem');
+      clearHistory.label = 'Clear Undo History';
+      clearHistory.className = 'neurosort-menu-item';
+      clearHistory.addEventListener('command', () => {
+        sortHistory.clear();
+        this.showToast('Undo history cleared', 'info');
+        this.updateUndoMenuItem();
+      });
+      menu.appendChild(clearHistory);
+
+      menu.addEventListener('popupshowing', () => {
+        this.updateUndoMenuItem();
+      });
+
+      document.getElementById('mainPopupSet')?.appendChild(menu) || 
+        document.body.appendChild(menu);
+
+      this.contextMenu = menu;
+      return menu;
+    }
+
+    updateUndoMenuItem() {
+      const undoItem = document.getElementById('neurosort-undo-menu-item');
+      if (undoItem) {
+        const hasHistory = !sortHistory.isEmpty();
+        undoItem.disabled = !hasHistory;
+        undoItem.label = hasHistory 
+          ? `Undo Last Sort (${sortHistory.getLength()} in history)`
+          : 'Nothing to undo';
+      }
+    }
+
+    async handleUndo() {
+      if (sortHistory.isEmpty()) {
+        this.showToast('Nothing to undo', 'info');
+        return;
+      }
+
+      this.isSorting = true;
+      this.setLoading(true);
+
+      try {
+        const result = await this.groupManager.undoLastSort();
+        
+        if (result.success) {
+          this.showToast(
+            `Undone: ${result.tabsUngrouped} tabs ungrouped, ${result.groupsRemoved} groups removed`,
+            'success'
+          );
+        } else {
+          this.showToast(result.reason || 'Nothing to undo', 'info');
+        }
+      } catch (error) {
+        logError('Error during undo:', error);
+        this.showToast(`Undo error: ${error.message}`, 'error');
+      } finally {
+        this.isSorting = false;
+        this.setLoading(false);
+        this.updateUndoMenuItem();
+      }
     }
 
     createBroomButton() {
@@ -864,11 +1121,30 @@ OUTPUT FORMAT:
       button.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.handleTidyClick(e);
+        if (e.button === 0) {
+          this.handleTidyClick(e);
+        }
+      });
+
+      button.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showContextMenu(e);
       });
 
       this.broomButton = button;
       return button;
+    }
+
+    showContextMenu(event) {
+      const menu = this.createContextMenu();
+      this.updateUndoMenuItem();
+      
+      menu.openPopupAtScreen(
+        event.screenX,
+        event.screenY,
+        true
+      );
     }
 
     findInsertionPoint() {
@@ -1243,7 +1519,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.0.4...');
+      console.log('[NeuroSort] Initializing v1.1.0...');
 
       await this.waitForDependencies();
 
@@ -1274,6 +1550,38 @@ OUTPUT FORMAT:
           e.stopPropagation();
           log('Keyboard shortcut triggered:', shortcut);
           this.ui.handleTidyClick();
+        }
+      }, true);
+
+      window.addEventListener('keydown', (e) => {
+        if (this.ui.isSorting) return;
+
+        const isMac = navigator.platform.toLowerCase().includes('mac');
+        const isUndoKey = e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'ж';
+        
+        if (!isUndoKey) return;
+
+        let isUndoShortcut = false;
+        if (isMac) {
+          isUndoShortcut = e.metaKey && !e.shiftKey && !e.ctrlKey;
+        } else {
+          isUndoShortcut = e.ctrlKey && !e.shiftKey && !e.metaKey;
+        }
+
+        if (isUndoShortcut) {
+          const activeElement = document.activeElement;
+          const isInputField = activeElement && (
+            activeElement.tagName === 'INPUT' ||
+            activeElement.tagName === 'TEXTAREA' ||
+            activeElement.isContentEditable
+          );
+
+          if (isInputField) return;
+
+          e.preventDefault();
+          e.stopPropagation();
+          log('Undo keyboard shortcut triggered');
+          this.ui.handleUndo();
         }
       }, true);
     }
@@ -1457,6 +1765,37 @@ OUTPUT FORMAT:
             color: var(--zen-text-primary, #eee);
           }
         }
+
+        /* Context Menu Styles */
+        #neurosort-context-menu {
+          background: var(--zen-bgcolor, #1a1a1a);
+          border: 1px solid var(--zen-border, #333);
+          border-radius: 8px;
+          padding: 4px 0;
+          min-width: 200px;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+
+        .neurosort-menu-item {
+          padding: 8px 16px !important;
+          color: var(--zen-text-primary, #fff) !important;
+          font-size: 13px !important;
+          cursor: pointer;
+        }
+
+        .neurosort-menu-item:hover {
+          background: var(--zen-button-hover-bg, rgba(255,255,255,0.1)) !important;
+        }
+
+        .neurosort-menu-item[disabled="true"] {
+          color: var(--zen-text-secondary, #666) !important;
+          pointer-events: none;
+        }
+
+        #neurosort-context-menu menuseparator {
+          margin: 4px 8px;
+          border-top: 1px solid var(--zen-border, #333);
+        }
       `;
 
       document.head.appendChild(style);
@@ -1499,6 +1838,6 @@ OUTPUT FORMAT:
   setTimeout(() => neurosort.init(), 1000);
   setTimeout(() => neurosort.init(), 3000);
 
-  console.log('[NeuroSort] Script loaded v1.0.4');
+  console.log('[NeuroSort] Script loaded v1.1.0');
 
 })();

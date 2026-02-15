@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.0.2 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.0.3 - NeuroSort - AI-powered tab organization for Zen Browser
 (() => {
   'use strict';
 
@@ -200,6 +200,80 @@
           };
           break;
       }
+      this._validState = this._computeValidation();
+    }
+
+    _computeValidation() {
+      switch (this.provider) {
+        case 'openai':
+          if (!this.config.apiKey || this.config.apiKey.trim() === '') {
+            return { valid: false, message: 'OpenAI API key not configured' };
+          }
+          return { valid: true, message: '' };
+        case 'gemini':
+          if (!this.config.apiKey || this.config.apiKey.trim() === '') {
+            return { valid: false, message: 'Gemini API key not configured' };
+          }
+          return { valid: true, message: '' };
+        case 'ollama':
+          return { valid: true, message: '' };
+        case 'custom':
+        default:
+          if (!this.config.apiKey || this.config.apiKey.trim() === '') {
+            return { valid: false, message: 'Custom API key not configured' };
+          }
+          return { valid: true, message: '' };
+      }
+    }
+
+    hasValidConfig() {
+      return this._validState?.valid ?? false;
+    }
+
+    validateConfig() {
+      return this._validState ?? { valid: false, message: 'Config not loaded' };
+    }
+
+    async withTimeout(promise, ms = 30000) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ms);
+      
+      try {
+        const result = await promise;
+        clearTimeout(timeoutId);
+        return result;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          throw new Error('Request timed out after 30 seconds');
+        }
+        throw error;
+      }
+    }
+
+    async withRetry(fn, maxRetries = 2) {
+      let lastError;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          return await fn();
+        } catch (error) {
+          lastError = error;
+          const isNetworkError = error.message?.includes('network') ||
+                                  error.message?.includes('fetch') ||
+                                  error.message?.includes('Network') ||
+                                  error.name === 'TypeError';
+          const isTimeout = error.message?.includes('timed out');
+          
+          if (attempt < maxRetries && (isNetworkError || isTimeout)) {
+            const delay = Math.pow(2, attempt) * 1000;
+            log(\`Retry attempt \${attempt + 1}/\${maxRetries} after \${delay}ms\`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            throw error;
+          }
+        }
+      }
+      throw lastError;
     }
 
     /**
@@ -286,6 +360,12 @@ OUTPUT FORMAT:
      * Make API request based on provider format
      */
     async makeRequest(prompt) {
+      return this.withRetry(async () => {
+        return this.withTimeout(this._makeRequestInternal(prompt), 30000);
+      }, 2);
+    }
+
+    async _makeRequestInternal(prompt) {
       switch (this.config.format) {
         case 'gemini':
           return this.geminiRequest(prompt);
@@ -745,29 +825,38 @@ OUTPUT FORMAT:
      * Find the insertion point for the broom button
      */
     findInsertionPoint() {
-      // Try multiple selectors for different Zen versions
+      // Try multiple selectors for different Zen versions and configurations
       const selectors = [
         '#zen-workspaces-button',  // Workspace button area
         '.zen-sidebar-top',         // Sidebar top area
-        '#TabsToolbar',            // Tab toolbar
-        '#tabbrowser-tabs',        // Tab container
+        '#zen-sidebar',             // Zen sidebar container
+        '.zen-vertical-tabs',       // Zen vertical tabs container
+        '#TabsToolbar',             // Tab toolbar
+        '#tabbrowser-tabs',         // Tab container
+        '#navigator-toolbox',       // Navigator toolbox (fallback)
+        'tabbox',                   // Generic tabbox element
       ];
 
+      log('Searching for insertion point, trying selectors:', selectors);
+
       for (const selector of selectors) {
+        log('Trying selector:', selector);
         const el = document.querySelector(selector);
         if (el) {
-          log('Found insertion point:', selector);
+          log('Found insertion point:', selector, el);
           return el;
         }
+        log('Selector not found:', selector);
       }
 
+      log('No insertion point found among all selectors');
       return null;
     }
 
     /**
-     * Inject the broom button into the DOM
+     * Inject the broom button into the DOM with retry mechanism
      */
-    injectBroomButton() {
+    async injectBroomButton(retryCount = 0) {
       if (!getPref(PREF.ENABLED, true)) {
         log('NeuroSort disabled, not injecting button');
         return;
@@ -785,7 +874,17 @@ OUTPUT FORMAT:
       // Find insertion point
       const insertionPoint = this.findInsertionPoint();
       if (!insertionPoint) {
-        log('Could not find insertion point for broom button');
+        log(`Could not find insertion point for broom button (retry ${retryCount}/3)`);
+        
+        // Retry with exponential backoff: 500ms, 1500ms (max 3 retries)
+        if (retryCount < 3) {
+          const delay = retryCount === 0 ? 500 : 1500;
+          log(`Retrying injection after ${delay}ms...`);
+          setTimeout(() => this.injectBroomButton(retryCount + 1), delay);
+        } else {
+          log('Max retries reached, attempting fallback injection');
+          this.injectBroomButtonFallback(button);
+        }
         return;
       }
 
@@ -796,7 +895,39 @@ OUTPUT FORMAT:
 
       // Insert button
       insertionPoint.appendChild(button);
-      log('Broom button injected');
+      log('Broom button injected successfully at:', insertionPoint.id || insertionPoint.className || insertionPoint.tagName);
+    }
+
+    /**
+     * Fallback injection when Zen workspaces aren't available
+     */
+    injectBroomButtonFallback(button) {
+      // Try to find any suitable container in the browser chrome
+      const fallbackContainers = [
+        document.querySelector('#browser'),
+        document.querySelector('#appcontent'),
+        document.querySelector('#main-window'),
+        document.body
+      ];
+
+      for (const container of fallbackContainers) {
+        if (container) {
+          log('Using fallback container:', container.id || container.tagName);
+          
+          // Position button in a visible location
+          button.style.position = 'fixed';
+          button.style.top = '10px';
+          button.style.right = '10px';
+          button.style.opacity = '0.8';
+          button.style.zIndex = '999999';
+          
+          container.appendChild(button);
+          log('Broom button injected via fallback');
+          return;
+        }
+      }
+
+      logError('Could not inject broom button - no suitable container found');
     }
 
     /**
@@ -808,7 +939,12 @@ OUTPUT FORMAT:
         return;
       }
 
-      // Get tabs to sort
+      const validation = this.groupManager.apiClient.validateConfig();
+      if (!validation.valid) {
+        this.showToast('Please configure your API key in settings', 'error');
+        return;
+      }
+
       const tabs = this.getUngroupedTabs();
       
       if (tabs.length < 2) {
@@ -831,7 +967,13 @@ OUTPUT FORMAT:
         }
       } catch (error) {
         logError('Error during tidy:', error);
-        this.showToast(\`Error: \${error.message}\`, 'error');
+        let errorMessage = error.message;
+        if (errorMessage.includes('timed out')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+          errorMessage = 'Network error. Please check your connection.';
+        }
+        this.showToast(\`Error: \${errorMessage}\`, 'error');
       } finally {
         this.isSorting = false;
         this.broomButton?.classList.remove('sorting');
@@ -1021,7 +1163,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.0.2...');
+      console.log('[NeuroSort] Initializing v1.0.3...');
 
       // Wait for dependencies
       await this.waitForDependencies();
@@ -1239,6 +1381,6 @@ OUTPUT FORMAT:
   setTimeout(() => neurosort.init(), 1000);
   setTimeout(() => neurosort.init(), 3000);
 
-  console.log('[NeuroSort] Script loaded v1.0.2');
+  console.log('[NeuroSort] Script loaded v1.0.3');
 
 })();

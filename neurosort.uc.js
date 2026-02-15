@@ -2,8 +2,8 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.1.0 - NeuroSort - AI-powered tab organization for Zen Browser
-// Features: Undo support (Ctrl/Cmd+Z), context menu, history of last 5 sorts
+// VERSION 1.2.0 - NeuroSort - AI-powered tab organization for Zen Browser
+// Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
 
@@ -286,6 +286,8 @@
     constructor() {
       this.provider = getPref(PREF.PROVIDER, 'custom');
       this.cacheConfig();
+      this.lastApiCallTime = 0;
+      this.minApiDelay = 500;
     }
 
     cacheConfig() {
@@ -398,26 +400,95 @@
       throw lastError;
     }
 
+    extractDomain(url) {
+      if (!url || url.startsWith('about:') || url.startsWith('chrome://')) {
+        return null;
+      }
+      try {
+        const urlObj = new URL(url);
+        let domain = urlObj.hostname.replace(/^www\./, '');
+        const parts = domain.split('.');
+        if (parts.length >= 2) {
+          domain = parts[parts.length - 2];
+        }
+        return domain.charAt(0).toUpperCase() + domain.slice(1);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    getDomainFrequency(tabsData) {
+      const domainCount = {};
+      for (const data of tabsData) {
+        const domain = this.extractDomain(data.url);
+        if (domain) {
+          domainCount[domain] = (domainCount[domain] || 0) + 1;
+        }
+      }
+      const sorted = Object.entries(domainCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([domain, count]) => `${domain}(${count})`);
+      return sorted;
+    }
+
+    groupByDomain(tabsData) {
+      const groups = {};
+      tabsData.forEach((data, i) => {
+        const domain = this.extractDomain(data.url) || 'Other';
+        if (!groups[domain]) groups[domain] = [];
+        groups[domain].push(i);
+      });
+      return groups;
+    }
+
+    truncatePrompt(prompt, maxLength = 2000) {
+      if (prompt.length <= maxLength) return prompt;
+      const lines = prompt.split('\n');
+      let result = [];
+      let currentLength = 0;
+      for (const line of lines) {
+        if (currentLength + line.length + 1 <= maxLength) {
+          result.push(line);
+          currentLength += line.length + 1;
+        } else {
+          break;
+        }
+      }
+      if (result.length < lines.length) {
+        result.push('... (truncated for length)');
+      }
+      return result.join('\n');
+    }
+
     buildPrompt(tabsData, existingGroups = []) {
       const existingGroupsList = existingGroups.length > 0
         ? existingGroups.map(g => `- ${g}`).join('\n')
         : 'None';
 
+      const frequentDomains = this.getDomainFrequency(tabsData);
+      const frequentDomainsList = frequentDomains.length > 0
+        ? frequentDomains.join(', ')
+        : 'None';
+
       const tabsList = tabsData.map((data, i) => {
         const parts = [`${i + 1}. Title: "${data.title}"`];
-        if (data.url && !data.url.startsWith('about:')) {
-          parts.push(`   URL: "${data.url}"`);
+        const domain = this.extractDomain(data.url);
+        if (domain) {
+          parts.push(`   Domain: "${domain}"`);
         }
-        if (data.description) {
-          parts.push(`   Description: "${data.description}"`);
+        if (data.description && data.description.length > 10) {
+          parts.push(`   Desc: "${data.description.substring(0, 80)}"`);
         }
         return parts.join('\n');
       }).join('\n\n');
 
-      return `Analyze the following tabs and assign each to a logical category.
+      let prompt = `Analyze the following tabs and assign each to a logical category.
 
 EXISTING CATEGORIES (use these exact names if a tab fits):
 ${existingGroupsList}
+
+FREQUENT DOMAINS: ${frequentDomainsList}
 
 TABS TO CATEGORIZE:
 ${tabsList}
@@ -434,6 +505,8 @@ OUTPUT FORMAT:
 - Match the number of tabs above
 - No numbering, no explanations, no extra text
 - Just the category names, one per line`;
+
+      return this.truncatePrompt(prompt, 2000);
     }
 
     parseResponse(responseText, tabsCount) {
@@ -653,8 +726,36 @@ OUTPUT FORMAT:
       return content.trim();
     }
 
+    checkRateLimit() {
+      const now = Date.now();
+      const timeSinceLastCall = now - this.lastApiCallTime;
+      if (timeSinceLastCall < this.minApiDelay) {
+        return { allowed: false, waitTime: this.minApiDelay - timeSinceLastCall };
+      }
+      return { allowed: true, waitTime: 0 };
+    }
+
+    fallbackCategorize(tabsData) {
+      return tabsData.map(data => {
+        const domain = this.extractDomain(data.url);
+        if (domain) {
+          return domain;
+        }
+        if (data.title) {
+          const words = data.title.split(/\s+/).slice(0, 2);
+          return words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        }
+        return 'Misc';
+      });
+    }
+
     async categorize(tabs, existingGroups = []) {
       this.cacheConfig();
+
+      const rateLimit = this.checkRateLimit();
+      if (!rateLimit.allowed) {
+        return { rateLimited: true, waitTime: rateLimit.waitTime };
+      }
 
       const tabsData = await Promise.all(tabs.map(tab => getTabData(tab)));
       log('Tab data collected:', tabsData);
@@ -662,11 +763,18 @@ OUTPUT FORMAT:
       const prompt = this.buildPrompt(tabsData, existingGroups);
       log('Prompt length:', prompt.length);
 
-      const response = await this.makeRequest(prompt);
-      log('AI Response:', response);
-
-      const categories = this.parseResponse(response, tabs.length);
-      log('Parsed categories:', categories);
+      let categories;
+      try {
+        this.lastApiCallTime = Date.now();
+        const response = await this.makeRequest(prompt);
+        log('AI Response:', response);
+        categories = this.parseResponse(response, tabs.length);
+        log('Parsed categories:', categories);
+      } catch (error) {
+        logError('API call failed, using fallback categorization:', error);
+        categories = this.fallbackCategorize(tabsData);
+        log('Fallback categories:', categories);
+      }
 
       return tabs.map((tab, i) => ({
         tab,
@@ -682,6 +790,44 @@ OUTPUT FORMAT:
   class GroupManager {
     constructor() {
       this.apiClient = new NeuroSortAPIClient();
+    }
+
+    getGroupStats() {
+      const workspaceId = window.gZenWorkspaces?.activeWorkspace;
+      const selector = workspaceId
+        ? `tab-group:has(tab[zen-workspace-id="${workspaceId}"])`
+        : 'tab-group';
+
+      const groups = [];
+      let totalTabsInGroups = 0;
+
+      document.querySelectorAll(selector).forEach(group => {
+        if (group.hasAttribute?.('zen-folder') ||
+            group.hasAttribute?.('split-view-group')) {
+          return;
+        }
+        const tabs = group.querySelectorAll('tab');
+        const tabCount = tabs.length;
+        totalTabsInGroups += tabCount;
+        groups.push({
+          name: group.getAttribute?.('label') || group.label || 'Unnamed',
+          tabCount
+        });
+      });
+
+      const totalTabs = gBrowser?.tabs?.length || 0;
+      const ungroupedTabs = totalTabs - totalTabsInGroups;
+      const avgTabsPerGroup = groups.length > 0
+        ? (totalTabsInGroups / groups.length).toFixed(1)
+        : 0;
+
+      return {
+        totalGroups: groups.length,
+        tabsInGroups: totalTabsInGroups,
+        tabsUngrouped: ungroupedTabs,
+        avgTabsPerGroup: parseFloat(avgTabsPerGroup),
+        groups
+      };
     }
 
     getExistingGroups() {
@@ -776,7 +922,18 @@ OUTPUT FORMAT:
         ? this.getExistingGroups()
         : [];
 
-      const categorizations = await this.apiClient.categorize(tabs, existingGroups);
+      const result = await this.apiClient.categorize(tabs, existingGroups);
+
+      if (result.rateLimited) {
+        return {
+          success: false,
+          reason: 'Rate limited',
+          rateLimited: true,
+          waitTime: result.waitTime
+        };
+      }
+
+      const categorizations = result;
 
       const groups = {};
       for (const { tab, category } of categorizations) {
@@ -992,7 +1149,7 @@ OUTPUT FORMAT:
       this.broomButton.title = title;
     }
 
-    createContextMenu() {
+createContextMenu() {
       if (this.contextMenu) {
         return this.contextMenu;
       }
@@ -1000,6 +1157,15 @@ OUTPUT FORMAT:
       const menu = document.createElement('menupopup');
       menu.id = 'neurosort-context-menu';
       menu.className = 'neurosort-menu';
+
+      const statsItem = document.createXULElement('menuitem');
+      statsItem.id = 'neurosort-stats-menu-item';
+      statsItem.className = 'neurosort-menu-item neurosort-stats-item';
+      statsItem.label = 'Loading stats...';
+      statsItem.disabled = true;
+      menu.appendChild(statsItem);
+
+      menu.appendChild(document.createXULElement('menuseparator'));
 
       const tidyItem = document.createXULElement('menuitem');
       tidyItem.label = 'Tidy Tabs';
@@ -1054,13 +1220,22 @@ OUTPUT FORMAT:
 
       menu.addEventListener('popupshowing', () => {
         this.updateUndoMenuItem();
+        this.updateStatsMenuItem();
       });
 
-      document.getElementById('mainPopupSet')?.appendChild(menu) || 
+      document.getElementById('mainPopupSet')?.appendChild(menu) ||
         document.body.appendChild(menu);
 
       this.contextMenu = menu;
       return menu;
+    }
+
+    updateStatsMenuItem() {
+      const statsItem = document.getElementById('neurosort-stats-menu-item');
+      if (!statsItem) return;
+
+      const stats = this.groupManager.getGroupStats();
+      statsItem.label = `Groups: ${stats.totalGroups} | Grouped: ${stats.tabsInGroups} | Ungrouped: ${stats.tabsUngrouped} | Avg: ${stats.avgTabsPerGroup}`;
     }
 
     updateUndoMenuItem() {
@@ -1294,7 +1469,12 @@ OUTPUT FORMAT:
 
       try {
         const result = await this.groupManager.organizeTabs(tabs);
-        
+
+        if (result.rateLimited) {
+          this.showToast(`Rate limited, please wait ${Math.ceil(result.waitTime / 1000)}s...`, 'info');
+          return;
+        }
+
         if (result.success) {
           let message;
           if (mode === 'all') {
@@ -1519,7 +1699,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.1.0...');
+      console.log('[NeuroSort] Initializing v1.2.0...');
 
       await this.waitForDependencies();
 
@@ -1730,6 +1910,10 @@ OUTPUT FORMAT:
           background: linear-gradient(135deg, #3b82f6, #2563eb);
         }
 
+        .neurosort-toast-warning {
+          background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
         .neurosort-toast-fade {
           animation: neurosort-toast-out 0.3s ease forwards;
         }
@@ -1792,6 +1976,12 @@ OUTPUT FORMAT:
           pointer-events: none;
         }
 
+        .neurosort-stats-item {
+          font-style: italic;
+          font-size: 12px !important;
+          color: var(--zen-text-secondary, #888) !important;
+        }
+
         #neurosort-context-menu menuseparator {
           margin: 4px 8px;
           border-top: 1px solid var(--zen-border, #333);
@@ -1838,6 +2028,6 @@ OUTPUT FORMAT:
   setTimeout(() => neurosort.init(), 1000);
   setTimeout(() => neurosort.init(), 3000);
 
-  console.log('[NeuroSort] Script loaded v1.1.0');
+  console.log('[NeuroSort] Script loaded v1.2.0');
 
 })();

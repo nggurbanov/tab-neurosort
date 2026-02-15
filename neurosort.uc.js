@@ -1087,6 +1087,7 @@ OUTPUT FORMAT:
       this.badge = null;
       this.badgeUpdateInterval = null;
       this.isParentHovered = false;
+      this.quickSettingsPopup = null;
     }
 
     createSpinner() {
@@ -1276,6 +1277,16 @@ createContextMenu() {
         this.updateUndoMenuItem();
       });
       menu.appendChild(clearHistory);
+
+      menu.appendChild(document.createXULElement('menuseparator'));
+
+      const quickSettingsItem = document.createXULElement('menuitem');
+      quickSettingsItem.label = 'Quick Settings';
+      quickSettingsItem.className = 'neurosort-menu-item';
+      quickSettingsItem.addEventListener('command', () => {
+        this.showQuickSettings();
+      });
+      menu.appendChild(quickSettingsItem);
 
       menu.addEventListener('popupshowing', () => {
         this.updateUndoMenuItem();
@@ -1695,6 +1706,192 @@ createContextMenu() {
         toast.classList.add('neurosort-toast-fade');
         setTimeout(() => toast.remove(), 300);
       }, 3000);
+    }
+
+    showQuickSettings() {
+      if (this.quickSettingsPopup) {
+        this.quickSettingsPopup.remove();
+        this.quickSettingsPopup = null;
+        return;
+      }
+
+      const popup = document.createElement('div');
+      popup.id = 'neurosort-quick-settings';
+      popup.className = 'neurosort-quick-settings';
+
+      const currentProvider = getPref(PREF.PROVIDER, 'custom');
+      const enabled = getPref(PREF.ENABLED, true);
+      const autoTidy = getPref(PREF.AUTO_TIDY, false);
+      const autoTidyThreshold = getPref(PREF.AUTO_TIDY_THRESHOLD, 6);
+      const debug = getPref(PREF.DEBUG, false);
+
+      let apiKeyPref, apiKeyValue;
+      switch (currentProvider) {
+        case 'openai':
+          apiKeyPref = PREF.OPENAI_API_KEY;
+          apiKeyValue = getPref(PREF.OPENAI_API_KEY, '');
+          break;
+        case 'gemini':
+          apiKeyPref = PREF.GEMINI_API_KEY;
+          apiKeyValue = getPref(PREF.GEMINI_API_KEY, '');
+          break;
+        case 'ollama':
+          apiKeyPref = null;
+          apiKeyValue = '';
+          break;
+        case 'custom':
+        default:
+          apiKeyPref = PREF.CUSTOM_API_KEY;
+          apiKeyValue = getPref(PREF.CUSTOM_API_KEY, '');
+          break;
+      }
+
+      popup.innerHTML = `
+        <div class="neurosort-quick-settings-header">
+          <span class="neurosort-quick-settings-title">Quick Settings</span>
+          <button class="neurosort-quick-settings-close" title="Close">&times;</button>
+        </div>
+        <div class="neurosort-quick-settings-content">
+          <label class="neurosort-quick-settings-row">
+            <span class="neurosort-quick-settings-label">Enabled</span>
+            <input type="checkbox" id="neurosort-qs-enabled" ${enabled ? 'checked' : ''}>
+          </label>
+          
+          <label class="neurosort-quick-settings-row">
+            <span class="neurosort-quick-settings-label">Provider</span>
+            <select id="neurosort-qs-provider" class="neurosort-quick-settings-select">
+              <option value="openai" ${currentProvider === 'openai' ? 'selected' : ''}>OpenAI</option>
+              <option value="gemini" ${currentProvider === 'gemini' ? 'selected' : ''}>Gemini</option>
+              <option value="ollama" ${currentProvider === 'ollama' ? 'selected' : ''}>Ollama</option>
+              <option value="custom" ${currentProvider === 'custom' ? 'selected' : ''}>Custom</option>
+            </select>
+          </label>
+          
+          <label class="neurosort-quick-settings-row" id="neurosort-qs-apikey-row">
+            <span class="neurosort-quick-settings-label">API Key</span>
+            <input type="password" id="neurosort-qs-apikey" class="neurosort-quick-settings-input" 
+                   value="${apiKeyValue}" placeholder="Enter API key" autocomplete="off">
+          </label>
+          
+          <label class="neurosort-quick-settings-row">
+            <span class="neurosort-quick-settings-label">Auto-tidy</span>
+            <input type="checkbox" id="neurosort-qs-autotidy" ${autoTidy ? 'checked' : ''}>
+          </label>
+          
+          <label class="neurosort-quick-settings-row">
+            <span class="neurosort-quick-settings-label">Auto-tidy threshold</span>
+            <input type="number" id="neurosort-qs-threshold" class="neurosort-quick-settings-input" 
+                   value="${autoTidyThreshold}" min="2" max="50">
+          </label>
+          
+          <label class="neurosort-quick-settings-row">
+            <span class="neurosort-quick-settings-label">Debug mode</span>
+            <input type="checkbox" id="neurosort-qs-debug" ${debug ? 'checked' : ''}>
+          </label>
+          
+          <div class="neurosort-quick-settings-footer">
+            <a href="about:preferences#neurosort" class="neurosort-quick-settings-link" target="_blank">
+              Open full settings
+            </a>
+          </div>
+        </div>
+      `;
+
+      const buttonRect = this.broomButton?.getBoundingClientRect();
+      if (buttonRect) {
+        popup.style.position = 'fixed';
+        popup.style.top = `${buttonRect.bottom + 8}px`;
+        popup.style.right = `${window.innerWidth - buttonRect.right}px`;
+      }
+
+      document.body.appendChild(popup);
+
+      popup.querySelector('.neurosort-quick-settings-close').addEventListener('click', () => {
+        popup.remove();
+        this.quickSettingsPopup = null;
+      });
+
+      popup.querySelector('#neurosort-qs-enabled').addEventListener('change', (e) => {
+        Services.prefs.setBoolPref(PREF.ENABLED, e.target.checked);
+        this.showToast(`NeuroSort ${e.target.checked ? 'enabled' : 'disabled'}`, 'info');
+      });
+
+      popup.querySelector('#neurosort-qs-provider').addEventListener('change', (e) => {
+        Services.prefs.setStringPref(PREF.PROVIDER, e.target.value);
+        this.groupManager.apiClient.cacheConfig();
+        this.updateQuickSettingsApiKey(e.target.value, popup);
+        this.showToast(`Provider changed to ${e.target.value}`, 'info');
+      });
+
+      popup.querySelector('#neurosort-qs-apikey').addEventListener('change', (e) => {
+        const provider = popup.querySelector('#neurosort-qs-provider').value;
+        const keyPref = this.getApiKeyPrefForProvider(provider);
+        if (keyPref) {
+          Services.prefs.setStringPref(keyPref, e.target.value.trim());
+          this.groupManager.apiClient.cacheConfig();
+          this.showToast('API key saved', 'success');
+        }
+      });
+
+      popup.querySelector('#neurosort-qs-autotidy').addEventListener('change', (e) => {
+        Services.prefs.setBoolPref(PREF.AUTO_TIDY, e.target.checked);
+        this.showToast(`Auto-tidy ${e.target.checked ? 'enabled' : 'disabled'}`, 'info');
+      });
+
+      popup.querySelector('#neurosort-qs-threshold').addEventListener('change', (e) => {
+        const value = Math.max(2, Math.min(50, parseInt(e.target.value) || 6));
+        Services.prefs.setIntPref(PREF.AUTO_TIDY_THRESHOLD, value);
+        e.target.value = value;
+      });
+
+      popup.querySelector('#neurosort-qs-debug').addEventListener('change', (e) => {
+        Services.prefs.setBoolPref(PREF.DEBUG, e.target.checked);
+      });
+
+      const closeOnOutsideClick = (e) => {
+        if (!popup.contains(e.target) && !this.broomButton?.contains(e.target)) {
+          popup.remove();
+          this.quickSettingsPopup = null;
+          document.removeEventListener('click', closeOnOutsideClick);
+        }
+      };
+      setTimeout(() => document.addEventListener('click', closeOnOutsideClick), 0);
+
+      this.quickSettingsPopup = popup;
+      this.updateQuickSettingsApiKeyRow(currentProvider, popup);
+    }
+
+    getApiKeyPrefForProvider(provider) {
+      switch (provider) {
+        case 'openai': return PREF.OPENAI_API_KEY;
+        case 'gemini': return PREF.GEMINI_API_KEY;
+        case 'custom': return PREF.CUSTOM_API_KEY;
+        default: return null;
+      }
+    }
+
+    updateQuickSettingsApiKey(provider, popup) {
+      const keyPref = this.getApiKeyPrefForProvider(provider);
+      const apikeyInput = popup.querySelector('#neurosort-qs-apikey');
+      
+      if (!keyPref || provider === 'ollama') {
+        apikeyInput.value = '';
+        apikeyInput.disabled = true;
+        apikeyInput.placeholder = 'Not required';
+      } else {
+        apikeyInput.value = getPref(keyPref, '');
+        apikeyInput.disabled = false;
+        apikeyInput.placeholder = 'Enter API key';
+      }
+      
+      this.updateQuickSettingsApiKeyRow(provider, popup);
+    }
+
+    updateQuickSettingsApiKeyRow(provider, popup) {
+      const row = popup.querySelector('#neurosort-qs-apikey-row');
+      if (row) {
+        row.style.display = provider === 'ollama' ? 'none' : 'flex';
+      }
     }
   }
 
@@ -2584,6 +2781,155 @@ createContextMenu() {
         #neurosort-context-menu menuseparator {
           margin: 4px 8px;
           border-top: 1px solid var(--zen-border, #333);
+        }
+
+        /* Quick Settings Popup */
+        .neurosort-quick-settings {
+          position: fixed;
+          width: 280px;
+          max-width: 280px;
+          background: var(--zen-bgcolor, #1a1a1a);
+          border: 1px solid var(--zen-border, #333);
+          border-radius: 12px;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+          z-index: 999999;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-size: 13px;
+          color: var(--zen-text-primary, #fff);
+          animation: neurosort-qs-in 0.2s ease;
+        }
+
+        @keyframes neurosort-qs-in {
+          from {
+            opacity: 0;
+            transform: translateY(-8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .neurosort-quick-settings-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 14px;
+          border-bottom: 1px solid var(--zen-border, #333);
+        }
+
+        .neurosort-quick-settings-title {
+          font-weight: 600;
+          font-size: 14px;
+          color: var(--zen-text-primary, #fff);
+        }
+
+        .neurosort-quick-settings-close {
+          width: 24px;
+          height: 24px;
+          border: none;
+          background: transparent;
+          color: var(--zen-text-secondary, #888);
+          font-size: 18px;
+          cursor: pointer;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.2s ease, color 0.2s ease;
+        }
+
+        .neurosort-quick-settings-close:hover {
+          background: var(--zen-button-hover-bg, rgba(255, 255, 255, 0.1));
+          color: var(--zen-text-primary, #fff);
+        }
+
+        .neurosort-quick-settings-content {
+          padding: 10px 14px 14px;
+        }
+
+        .neurosort-quick-settings-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 8px 0;
+          cursor: pointer;
+        }
+
+        .neurosort-quick-settings-row:hover {
+          background: var(--zen-button-hover-bg, rgba(255, 255, 255, 0.05));
+          border-radius: 6px;
+          margin: 0 -6px;
+          padding: 8px 6px;
+        }
+
+        .neurosort-quick-settings-label {
+          color: var(--zen-text-secondary, #bbb);
+          font-size: 13px;
+        }
+
+        .neurosort-quick-settings-input {
+          width: 100px;
+          padding: 6px 8px;
+          border: 1px solid var(--zen-border, #444);
+          border-radius: 6px;
+          background: var(--zen-input-bg, rgba(0, 0, 0, 0.3));
+          color: var(--zen-text-primary, #fff);
+          font-size: 12px;
+          transition: border-color 0.2s ease;
+          box-sizing: border-box;
+        }
+
+        .neurosort-quick-settings-input:focus {
+          outline: none;
+          border-color: #8b5cf6;
+        }
+
+        .neurosort-quick-settings-input[type="number"] {
+          width: 60px;
+          text-align: center;
+        }
+
+        .neurosort-quick-settings-select {
+          width: 100px;
+          padding: 6px 8px;
+          border: 1px solid var(--zen-border, #444);
+          border-radius: 6px;
+          background: var(--zen-input-bg, rgba(0, 0, 0, 0.3));
+          color: var(--zen-text-primary, #fff);
+          font-size: 12px;
+          cursor: pointer;
+        }
+
+        .neurosort-quick-settings-select:focus {
+          outline: none;
+          border-color: #8b5cf6;
+        }
+
+        .neurosort-quick-settings-row input[type="checkbox"] {
+          width: 18px;
+          height: 18px;
+          accent-color: #8b5cf6;
+          cursor: pointer;
+        }
+
+        .neurosort-quick-settings-footer {
+          margin-top: 12px;
+          padding-top: 10px;
+          border-top: 1px solid var(--zen-border, #333);
+          text-align: center;
+        }
+
+        .neurosort-quick-settings-link {
+          color: #8b5cf6;
+          text-decoration: none;
+          font-size: 12px;
+          transition: color 0.2s ease;
+        }
+
+        .neurosort-quick-settings-link:hover {
+          color: #a78bfa;
+          text-decoration: underline;
         }
       `;
 

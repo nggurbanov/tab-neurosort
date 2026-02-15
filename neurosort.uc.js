@@ -1,4 +1,8 @@
-// VERSION 1.0.1 - NeuroSort - AI-powered tab organization for Zen Browser
+// ==UserScript==
+// @name           NeuroSort
+// @ignorecache
+// ==/UserScript==
+// VERSION 1.0.2 - NeuroSort - AI-powered tab organization for Zen Browser
 (() => {
   'use strict';
 
@@ -1017,7 +1021,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.0.1...');
+      console.log('[NeuroSort] Initializing v1.0.2...');
 
       // Wait for dependencies
       await this.waitForDependencies();
@@ -1235,6 +1239,6 @@ OUTPUT FORMAT:
   setTimeout(() => neurosort.init(), 1000);
   setTimeout(() => neurosort.init(), 3000);
 
-  console.log('[NeuroSort] Script loaded v1.0.1');
+  console.log('[NeuroSort] Script loaded v1.0.2');
 
 })();

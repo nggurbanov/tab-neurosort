@@ -1,7 +1,7 @@
 # NeuroSort
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.0.3-blue.svg" alt="Version">
   <img src="https://img.shields.io/badge/zen%20browser-compatible-purple.svg" alt="Zen Browser">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
 </div>
@@ -9,6 +9,58 @@
 **AI-powered tab organization for Zen Browser**
 
 NeuroSort automatically organizes your tabs into smart groups using OpenAI-compatible APIs. Inspired by Arc Browser's "Tidy Tabs" feature.
+
+---
+
+## ⚠️ IMPORTANT PREREQUISITE
+
+**You MUST enable "Allow unsafe JS" in Sine settings for this mod to work!**
+
+> **Why is this needed?** Sine blocks scripts from external sources (like GitHub) by default for security. Only mods from the official Sine store are auto-trusted. Since NeuroSort is installed from GitHub, you must explicitly allow unsafe JS.
+
+### How to Enable
+
+1. Open Zen Browser Settings
+2. Navigate to **Settings → Sine → Allow unsafe JS from external sources**
+3. Toggle it **ON**
+4. Restart Zen Browser
+
+**Without this setting enabled, the broom button will NOT appear and the mod will not load.**
+
+---
+
+## 📦 Installation
+
+### Prerequisites
+
+- **Zen Browser** - [Download here](https://zen-browser.app/)
+- **Sine** - Theme/mod manager for Firefox-based browsers - [Installation Guide](https://github.com/CosmoCreeper/Sine/wiki/Installation)
+- **Advanced Tab Groups** - Install via Sine marketplace
+
+### Step 1: Enable "Allow unsafe JS"
+
+**This is required before installation!**
+
+1. Open Zen Browser Settings
+2. Go to **Settings → Sine → Allow unsafe JS from external sources**
+3. Enable the toggle
+4. Restart Zen Browser if needed
+
+### Step 2: Install from GitHub
+
+1. Open Zen Browser Settings
+2. Go to **Sine → Mods**
+3. Click "Add repository" or paste the GitHub URL in the marketplace
+4. Enter: `tyrell/tab-neurosort` (or your fork URL)
+5. Install and enable the mod
+
+### Step 3: Configure API Settings
+
+1. Open Zen Browser Settings
+2. Go to **Sine → NeuroSort preferences**
+3. Configure your AI provider (see Configuration section below)
+
+---
 
 ## ✨ Features
 
@@ -19,39 +71,7 @@ NeuroSort automatically organizes your tabs into smart groups using OpenAI-compa
 - 📝 **Smart Context** - Fetches page descriptions for better categorization
 - 🎯 **Existing Group Awareness** - AI prefers existing group names
 
-## 📦 Installation
-
-### Prerequisites
-
-1. **Zen Browser** - [Download here](https://zen-browser.app/)
-2. **Sine** - Theme/mod manager for Firefox-based browsers - [Installation Guide](https://github.com/CosmoCreeper/Sine/wiki/Installation)
-3. **Advanced Tab Groups** - Install via Sine marketplace
-
-### Method 1: Via Sine (Recommended)
-
-1. Open Zen Browser Settings
-2. Go to Sine → Mods
-3. Add repository: `tyrell/tab-neurosort` (or your fork URL)
-4. Install and enable
-
-### Method 2: Manual Installation
-
-1. Navigate to your Zen Browser profile folder:
-   - **Linux**: `~/.zen/` or `~/.var/app/app.zen_browser.zen/`
-   - **macOS**: `~/Library/Application Support/Zen/`
-   - **Windows**: `%APPDATA%\Zen\`
-
-2. Locate or create the `chrome` folder
-
-3. Copy the following files:
-   ```
-   neurosort.uc.js → chrome/JS/
-   userChrome.css → chrome/
-   preferences.json → chrome/
-   theme.json → chrome/
-   ```
-
-4. Restart Zen Browser
+---
 
 ## ⚙️ Configuration
 
@@ -96,6 +116,8 @@ Works with:
 - [OpenRouter](https://openrouter.ai/)
 - Any OpenAI-compatible API server
 
+---
+
 ## 🎯 Usage
 
 ### Manual Tidy
@@ -118,6 +140,8 @@ To sort specific tabs:
 2. Click the broom button
 3. Only selected tabs will be organized
 
+---
+
 ## 🔧 Preferences
 
 | Setting | Description | Default |
@@ -133,20 +157,37 @@ To sort specific tabs:
 | Fetch descriptions | Get meta descriptions for context | `true` |
 | Debug mode | Log to browser console | `false` |
 
+---
+
 ## 🐛 Troubleshooting
 
 ### Button Not Appearing
 
-1. Ensure Sine is properly installed
-2. Check that Advanced Tab Groups is installed
-3. Verify `neurosort.enabled` is `true` in preferences
-4. Try restarting Zen Browser
+**Most common cause: "Allow unsafe JS" is disabled**
+
+1. Go to **Settings → Sine → Allow unsafe JS from external sources**
+2. Make sure it's **ENABLED**
+3. Restart Zen Browser
+4. If still not working, ensure Sine is properly installed and Advanced Tab Groups is installed
+5. Verify `neurosort.enabled` is `true` in preferences
+
+### No Console Logs / Script Not Loading
+
+**This confirms "Allow unsafe JS" is disabled!**
+
+Sine blocks scripts from GitHub by default. The script won't load at all without this setting.
+
+1. Go to **Settings → Sine → Allow unsafe JS from external sources**
+2. Enable it
+3. Restart Zen Browser
+4. Check browser console (F12) for NeuroSort logs
 
 ### API Errors
 
-1. **401 Unauthorized**: Check your API key
+1. **401 Unauthorized**: Check your API key is correct
 2. **Network Error**: Verify endpoint URL is correct
 3. **Timeout**: Large tab counts may take longer; try smaller batches
+4. **Invalid endpoint**: Make sure the URL includes the API version (e.g., `/v1` for OpenAI-compatible)
 
 ### Groups Not Created
 
@@ -157,6 +198,8 @@ To sort specific tabs:
 ### Debug Mode
 
 Enable debug logging in NeuroSort preferences to see detailed logs in the browser console (F12 → Console).
+
+---
 
 ## 🏗️ Architecture
 
@@ -169,6 +212,8 @@ NeuroSort
 └── NeuroSort             # Main orchestrator
 ```
 
+---
+
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -177,16 +222,20 @@ NeuroSort
 4. Push to branch: `git push origin feature/amazing-feature`
 5. Open a Pull Request
 
+---
+
 ## 📝 License
 
 MIT License - see [LICENSE](LICENSE) for details.
+
+---
 
 ## 🙏 Acknowledgments
 
 - [Arc Browser](https://arc.net/) - Inspiration for Tidy Tabs
 - [Advanced Tab Groups](https://github.com/Vertex-Mods/Advanced-Tab-Groups) - Foundation for tab group management
 - [Sine](https://github.com/CosmoCreeper/Sine) - Mod distribution system
-- [AI-TabGroups-ZenBrowser](https://github.com/Darsh-A/Ai-TabGroups-ZenBrowser) - Reference implementation
+- [AI-TabGroups-ZenBrowser](https://github.com/Darsh-A/AI-TabGroups-ZenBrowser) - Reference implementation
 
 ---
 

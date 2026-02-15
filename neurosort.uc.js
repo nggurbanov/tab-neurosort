@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.2.0 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.0 - NeuroSort - AI-powered tab organization for Zen Browser
 // Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
@@ -1081,12 +1081,81 @@ OUTPUT FORMAT:
       this.isSorting = false;
       this.toastContainer = null;
       this.contextMenu = null;
+      this.badge = null;
+      this.badgeUpdateInterval = null;
+      this.isParentHovered = false;
     }
 
     createSpinner() {
       const spinner = document.createElement('div');
       spinner.className = 'neurosort-spinner';
       return spinner;
+    }
+
+    createBadge() {
+      const badge = document.createElement('span');
+      badge.className = 'neurosort-badge';
+      badge.style.display = 'none';
+      return badge;
+    }
+
+    updateBadge() {
+      if (!this.badge || !this.broomButton) return;
+
+      const stats = this.groupManager.getGroupStats();
+      const ungroupedCount = stats.tabsUngrouped;
+      const threshold = getPref(PREF.AUTO_TIDY_THRESHOLD, 6);
+
+      this.badge.textContent = ungroupedCount;
+
+      if (ungroupedCount >= threshold) {
+        this.badge.classList.add('neurosort-badge-highlight');
+      } else {
+        this.badge.classList.remove('neurosort-badge-highlight');
+      }
+
+      this.badge.style.display = ungroupedCount > 0 ? 'flex' : 'none';
+    }
+
+    updateDynamicTooltip() {
+      if (!this.broomButton) return;
+
+      const stats = this.groupManager.getGroupStats();
+      const shortcut = getPref(PREF.KEYBOARD_SHORTCUT, 'ctrl+shift+t');
+      const shortcutDisplay = formatShortcutForDisplay(shortcut);
+      const apiConfigured = this.groupManager.apiClient.hasValidConfig();
+
+      let title = `${stats.tabsUngrouped} ungrouped tabs - Click to tidy`;
+      if (shortcutDisplay) {
+        title += `\nShortcut: ${shortcutDisplay}`;
+      }
+      title += `\nAPI: ${apiConfigured ? 'Configured' : 'Not configured'}`;
+      title += '\nCtrl+Shift+Click: Tidy selected tabs';
+      title += '\nAlt+Shift+Click: Tidy ALL tabs';
+      title += '\nRight-click: Options menu';
+
+      this.broomButton.title = title;
+    }
+
+    startBadgeUpdates() {
+      if (this.badgeUpdateInterval) return;
+
+      this.updateBadge();
+      this.updateDynamicTooltip();
+
+      this.badgeUpdateInterval = setInterval(() => {
+        if (this.isParentHovered) {
+          this.updateBadge();
+          this.updateDynamicTooltip();
+        }
+      }, 5000);
+    }
+
+    stopBadgeUpdates() {
+      if (this.badgeUpdateInterval) {
+        clearInterval(this.badgeUpdateInterval);
+        this.badgeUpdateInterval = null;
+      }
     }
 
     createBroomIcon() {
@@ -1133,20 +1202,7 @@ OUTPUT FORMAT:
     }
 
     updateButtonTitle() {
-      if (!this.broomButton) return;
-
-      const shortcut = getPref(PREF.KEYBOARD_SHORTCUT, 'ctrl+shift+t');
-      const shortcutDisplay = formatShortcutForDisplay(shortcut);
-      
-      let title = 'Tidy Tabs with AI';
-      if (shortcutDisplay) {
-        title += ` (${shortcutDisplay})`;
-      }
-      title += '\nCtrl+Shift+Click: Tidy selected tabs';
-      title += '\nAlt+Shift+Click: Tidy ALL tabs';
-      title += '\nRight-click: Options menu';
-      
-      this.broomButton.title = title;
+      this.updateDynamicTooltip();
     }
 
 createContextMenu() {
@@ -1276,6 +1332,8 @@ createContextMenu() {
         this.isSorting = false;
         this.setLoading(false);
         this.updateUndoMenuItem();
+        this.updateBadge();
+        this.updateDynamicTooltip();
       }
     }
 
@@ -1291,6 +1349,9 @@ createContextMenu() {
 
       button.appendChild(this.createBroomIcon());
 
+      this.badge = this.createBadge();
+      button.appendChild(this.badge);
+
       this.updateButtonTitle();
 
       button.addEventListener('click', (e) => {
@@ -1305,6 +1366,16 @@ createContextMenu() {
         e.preventDefault();
         e.stopPropagation();
         this.showContextMenu(e);
+      });
+
+      button.addEventListener('mouseenter', () => {
+        this.isParentHovered = true;
+        this.updateBadge();
+        this.updateDynamicTooltip();
+      });
+
+      button.addEventListener('mouseleave', () => {
+        this.isParentHovered = false;
       });
 
       this.broomButton = button;
@@ -1384,6 +1455,18 @@ createContextMenu() {
 
       insertionPoint.appendChild(button);
       log('Broom button injected successfully at:', insertionPoint.id || insertionPoint.className || insertionPoint.tagName);
+
+      this.startBadgeUpdates();
+
+      const parent = insertionPoint;
+      parent.addEventListener('mouseenter', () => {
+        this.isParentHovered = true;
+        this.updateBadge();
+        this.updateDynamicTooltip();
+      });
+      parent.addEventListener('mouseleave', () => {
+        this.isParentHovered = false;
+      });
     }
 
     injectBroomButtonFallback(button) {
@@ -1504,6 +1587,8 @@ createContextMenu() {
         this.broomButton?.classList.remove('neurosort-tidy-all');
         this.broomButton?.classList.remove('neurosort-tidy-selected');
         this.setTabsSorting(tabs, false);
+        this.updateBadge();
+        this.updateDynamicTooltip();
       }
     }
 
@@ -1699,7 +1784,7 @@ createContextMenu() {
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.2.0...');
+      console.log('[NeuroSort] Initializing v1.1.0...');
 
       await this.waitForDependencies();
 
@@ -1821,6 +1906,40 @@ createContextMenu() {
         }
 
         #neurosort-broom.loading {
+          opacity: 1;
+        }
+
+        .neurosort-badge {
+          position: absolute;
+          top: -4px;
+          right: -4px;
+          min-width: 16px;
+          height: 16px;
+          padding: 0 4px;
+          border-radius: 8px;
+          background: var(--zen-text-secondary, #888);
+          color: #fff;
+          font-size: 10px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          opacity: 0;
+          transition: opacity 0.2s ease, background 0.2s ease;
+        }
+
+        #neurosort-broom:hover .neurosort-badge {
+          opacity: 1;
+        }
+
+        .neurosort-badge-highlight {
+          background: #ef4444 !important;
+          box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+        }
+
+        #zen-workspaces-button:hover .neurosort-badge,
+        .zen-sidebar-top:hover .neurosort-badge,
+        #TabsToolbar:hover .neurosort-badge {
           opacity: 1;
         }
 
@@ -2028,6 +2147,6 @@ createContextMenu() {
   setTimeout(() => neurosort.init(), 1000);
   setTimeout(() => neurosort.init(), 3000);
 
-  console.log('[NeuroSort] Script loaded v1.2.0');
+  console.log('[NeuroSort] Script loaded v1.1.0');
 
 })();

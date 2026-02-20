@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.1.2 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.3 - NeuroSort - AI-powered tab organization for Zen Browser
 // Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
@@ -507,10 +507,10 @@ INSTRUCTIONS:
 OUTPUT FORMAT:
 - Output exactly ONE category per line
 - Match the number of tabs above
-- No numbering, no explanations, no extra text
 - Just the category names, one per line`;
 
-      return this.truncatePrompt(prompt, 2000);
+      // Return the full prompt instead of truncating it, so all tabs are sent to the LLM
+      return prompt;
     }
 
     parseResponse(responseText, tabsCount) {
@@ -1581,7 +1581,9 @@ OUTPUT FORMAT:
           this.showToast(`Tidying ${tabs.length} ungrouped tabs...`, 'info');
         }
       } else {
-        tabs = this.getUngroupedTabs();
+        mode = 'all';
+        tabs = this.getAllTabsForTidy();
+        this.showToast(`Tidying ALL ${tabs.length} tabs...`, 'info');
       }
 
       if (tabs.length < 2) {
@@ -2493,7 +2495,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.1.2...');
+      console.log('[NeuroSort] Initializing v1.1.3...');
 
       await this.waitForDependencies();
 

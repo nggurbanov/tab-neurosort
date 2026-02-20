@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.1.5 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.6 - NeuroSort - AI-powered tab organization for Zen Browser
 // Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
@@ -250,6 +250,7 @@
           const urlObj = new URL(url);
           hostname = urlObj.hostname.replace(/^www\./, '');
         } catch (e) {
+          const keyName = /alt\+shift\+t/i.test(shortcut) ? 'Alt+Shift+T' : 'Custom key';
           hostname = url.startsWith('about:') ? 'Internal Page' : 'Invalid URL';
         }
       }
@@ -1189,6 +1190,7 @@ OUTPUT FORMAT:
       svg.setAttribute('class', 'broom-icon');
 
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('fill-rule', 'evenodd');
 
       const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path1.setAttribute('d', 'M19.9132 21.3765C19.8875 21.0162 19.6455 20.7069 19.3007 20.5993L7.21755 16.8291C6.87269 16.7215 6.49768 16.8384 6.27165 17.1202C5.73893 17.7845 4.72031 19.025 3.78544 19.9965C2.4425 21.392 3.01177 22.4772 4.66526 22.9931C4.82548 23.0431 5.78822 21.7398 6.20045 21.7398C6.51906 21.8392 6.8758 23.6828 7.26122 23.8031C7.87402 23.9943 8.55929 24.2081 9.27891 24.4326C9.59033 24.5298 10.2101 23.0557 10.5313 23.1559C10.7774 23.2327 10.7236 24.8834 10.9723 24.961C11.8322 25.2293 12.699 25.4997 13.5152 25.7544C13.868 25.8645 14.8344 24.3299 15.1637 24.4326C15.496 24.5363 15.191 26.2773 15.4898 26.3705C16.7587 26.7664 17.6824 27.0546 17.895 27.1209C19.5487 27.6369 20.6333 27.068 20.3226 25.1563C20.1063 23.8255 19.9737 22.2258 19.9132 21.3765Z');
@@ -1288,7 +1290,7 @@ OUTPUT FORMAT:
 
       const undoItem = document.createXULElement('menuitem');
       undoItem.id = 'neurosort-undo-menu-item';
-      undoItem.label = 'Undo Last Sort (Ctrl/Cmd+Z)';
+      undoItem.label = 'Undo Last Sort (Alt+Shift+Z)';
       undoItem.className = 'neurosort-menu-item';
       undoItem.addEventListener('command', () => {
         this.handleUndo();
@@ -1427,10 +1429,14 @@ OUTPUT FORMAT:
       const menu = this.createContextMenu();
       this.updateUndoMenuItem();
 
-      menu.openPopupAtScreen(
-        event.screenX,
-        event.screenY,
-        true
+      menu.openPopup(
+        this.broomButton,
+        'after_pointer',
+        0,
+        0,
+        false,
+        false,
+        event
       );
     }
 
@@ -2521,7 +2527,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.1.5...');
+      console.log('[NeuroSort] Initializing v1.1.6...');
 
       await this.waitForDependencies();
 
@@ -2593,7 +2599,7 @@ OUTPUT FORMAT:
       window.addEventListener('keydown', (e) => {
         if (this.ui.isSorting) return;
 
-        const shortcut = getPref(PREF.KEYBOARD_SHORTCUT, 'ctrl+shift+t');
+        const shortcut = getPref(PREF.KEYBOARD_SHORTCUT, 'alt+shift+t');
         if (!shortcut) return;
 
         if (matchesKeyboardEvent(shortcut, e)) {
@@ -2614,9 +2620,9 @@ OUTPUT FORMAT:
 
         let isUndoShortcut = false;
         if (isMac) {
-          isUndoShortcut = e.metaKey && !e.shiftKey && !e.ctrlKey;
+          isUndoShortcut = e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey;
         } else {
-          isUndoShortcut = e.ctrlKey && !e.shiftKey && !e.metaKey;
+          isUndoShortcut = e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey;
         }
 
         if (isUndoShortcut) {

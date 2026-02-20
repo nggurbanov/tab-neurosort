@@ -35,7 +35,8 @@
   min-width: 0 !important;
   overflow: hidden !important;
   pointer-events: none !important;
-  margin: 0 8px 0 0 !important;
+  position: absolute !important;
+  margin: 0 !important;
   padding: 0 !important;
   display: flex !important;
   align-items: center !important;
@@ -249,7 +250,6 @@ tab-group.neurosort-new {
 #sidebar-box[sidebarstyle="compact"] #neurosort-broom {
   width: 24px !important;
   height: 24px !important;
-  right: 4px !important;
 }
 
 /* Fullscreen mode - hide toast container */
@@ -282,9 +282,7 @@ tab-group.neurosort-new {
 }
 
 /* Zen Sidebar specific */
-.zen-sidebar #neurosort-broom {
-  right: 4px !important;
-}
+.zen-sidebar #neurosort-broom {}
 
 /* Zen Split View - don't show button in split view tabs */
 .split-view-tab #neurosort-broom {
@@ -319,7 +317,7 @@ tab-group.neurosort-new {
 /* Users can override these variables in their own userChrome.css */
 :root {
   --neurosort-button-size: 28px;
-  --neurosort-button-offset: 8px;
+  --neurosort-button-offset: 48px;
   --neurosort-toast-duration: 3s;
   --neurosort-animation-speed: 0.3s;
 }

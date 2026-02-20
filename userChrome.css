@@ -35,7 +35,7 @@
   min-width: 0 !important;
   overflow: hidden !important;
   pointer-events: none !important;
-  margin: 0 !important;
+  margin: 0 8px 0 0 !important;
   padding: 0 !important;
   display: flex !important;
   align-items: center !important;
@@ -82,12 +82,29 @@
 }
 
 @keyframes neurosort-sweep {
-  0% { transform: rotate(0deg); }
-  20% { transform: rotate(-15deg); }
-  40% { transform: rotate(15deg); }
-  60% { transform: rotate(-15deg); }
-  80% { transform: rotate(15deg); }
-  100% { transform: rotate(0deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  20% {
+    transform: rotate(-15deg);
+  }
+
+  40% {
+    transform: rotate(15deg);
+  }
+
+  60% {
+    transform: rotate(-15deg);
+  }
+
+  80% {
+    transform: rotate(15deg);
+  }
+
+  100% {
+    transform: rotate(0deg);
+  }
 }
 
 /* ============================================================================
@@ -101,8 +118,15 @@
 }
 
 @keyframes neurosort-tab-pulse {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 /* Tab closing animation */
@@ -111,16 +135,17 @@
 }
 
 @keyframes neurosort-fade-up {
-  0% { 
-    opacity: 1; 
-    transform: translateY(0); 
+  0% {
+    opacity: 1;
+    transform: translateY(0);
   }
-  100% { 
-    opacity: 0; 
-    transform: translateY(-20px); 
-    max-height: 0px; 
-    padding: 0; 
-    margin: 0; 
+
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+    max-height: 0px;
+    padding: 0;
+    margin: 0;
   }
 }
 
@@ -145,7 +170,7 @@
   font-size: 13px !important;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
   color: #fff !important;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
   animation: neurosort-toast-in 0.3s ease !important;
   max-width: 300px !important;
   pointer-events: auto !important;
@@ -172,6 +197,7 @@
     opacity: 0;
     transform: translateX(100%);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -183,6 +209,7 @@
     opacity: 1;
     transform: translateX(0);
   }
+
   to {
     opacity: 0;
     transform: translateX(100%);
@@ -207,6 +234,7 @@ tab-group.neurosort-new {
     opacity: 0;
     transform: translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -237,9 +265,9 @@ tab-group.neurosort-new {
   #neurosort-broom {
     color: var(--zen-text-secondary, #aaa) !important;
   }
-  
+
   #neurosort-broom:hover {
-    background: var(--zen-button-hover-bg, rgba(255,255,255,0.15)) !important;
+    background: var(--zen-button-hover-bg, rgba(255, 255, 255, 0.15)) !important;
     color: var(--zen-text-primary, #eee) !important;
   }
 }
@@ -278,7 +306,7 @@ tab-group.neurosort-new {
   #neurosort-broom {
     border: 1px solid currentColor !important;
   }
-  
+
   .neurosort-toast {
     border: 2px solid #fff !important;
   }

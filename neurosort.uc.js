@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.1.3 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.4 - NeuroSort - AI-powered tab organization for Zen Browser
 // Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
@@ -326,6 +326,14 @@
             model: getPref(PREF.CUSTOM_MODEL, 'cx/gpt-5.1-codex-mini'),
             format: getPref(PREF.CUSTOM_FORMAT, 'openai')
           };
+
+          logError('--------- API DEBUG INFO ---------');
+          logError('Provider loaded:', this.provider);
+          logError('Endpoint loaded:', this.config.endpoint);
+          logError('API Key loaded length:', this.config.apiKey ? this.config.apiKey.length : 0);
+          logError('Model loaded:', this.config.model);
+          logError('Format loaded:', this.config.format);
+          logError('---------------------------------');
           break;
       }
       this._validState = this._computeValidation();
@@ -587,7 +595,8 @@ OUTPUT FORMAT:
     }
 
     async openaiRequest(prompt) {
-      const url = `${this.config.endpoint}/chat/completions`;
+      const baseUrl = this.config.endpoint.replace(/\/+$/, '');
+      const url = `${baseUrl}/chat/completions`;
       const headers = {
         'Content-Type': 'application/json',
       };
@@ -612,6 +621,12 @@ OUTPUT FORMAT:
         max_tokens: Math.max(256, prompt.length / 4),
         stream: false
       };
+
+      logError('--------- FETCH DEBUG INFO ---------');
+      logError('Attempting to fetch URL:', url);
+      logError('Attempting to fetch with headers:', JSON.stringify(headers));
+      logError('Attempting to fetch with body:', JSON.stringify(body));
+      logError('-----------------------------------');
 
       log('OpenAI request to:', url, 'with model:', this.config.model);
 
@@ -1545,15 +1560,15 @@ OUTPUT FORMAT:
       logError('Could not inject broom button - no suitable container found');
     }
 
-    async handleTidyClick(event) {
+    async handleTidyClick(event = null, isAuto = false) {
       if (this.isSorting) {
-        log('Already sorting, ignoring click');
+        if (!isAuto) log('Already sorting, ignoring click');
         return;
       }
 
       const validation = this.groupManager.apiClient.validateConfig();
       if (!validation.valid) {
-        this.showToast('Please configure your API key in settings', 'error');
+        if (!isAuto) this.showToast('Please configure your API key in settings', 'error');
         return;
       }
 
@@ -1563,7 +1578,10 @@ OUTPUT FORMAT:
       let tabs;
       let mode = 'normal';
 
-      if (isAltShiftClick) {
+      if (isAuto) {
+        mode = 'normal';
+        tabs = this.getUngroupedTabs();
+      } else if (isAltShiftClick) {
         mode = 'all';
         tabs = this.getAllTabsForTidy();
         this.showToast(`Tidying ALL ${tabs.length} tabs...`, 'info');
@@ -1587,7 +1605,7 @@ OUTPUT FORMAT:
       }
 
       if (tabs.length < 2) {
-        this.showToast('Not enough tabs to tidy', 'info');
+        if (!isAuto) this.showToast('Not enough tabs to tidy', 'info');
         return;
       }
 
@@ -1605,7 +1623,7 @@ OUTPUT FORMAT:
         const result = await this.groupManager.organizeTabs(tabs);
 
         if (result.rateLimited) {
-          this.showToast(`Rate limited, please wait ${Math.ceil(result.waitTime / 1000)}s...`, 'info');
+          if (!isAuto) this.showToast(`Rate limited, please wait ${Math.ceil(result.waitTime / 1000)}s...`, 'info');
           return;
         }
 
@@ -1619,16 +1637,18 @@ OUTPUT FORMAT:
             message = `Tidied ${tabs.length} tabs into ${result.groupsCreated} groups`;
           }
 
-          if (result.fallbackUsed) {
-            message += ' (Local Fallback Used. Check API settings)';
-            this.showToast(message, 'warning');
-          } else if (result.groupsCreated === 0) {
-            this.showToast('0 groups created. Tabs may be too dissimilar or API rejected prompt.', 'warning');
-          } else {
-            this.showToast(message, 'success');
+          if (!isAuto) {
+            if (result.fallbackUsed) {
+              message += ' (Local Fallback Used. Check API settings)';
+              this.showToast(message, 'warning');
+            } else if (result.groupsCreated === 0) {
+              this.showToast('0 groups created. Tabs may be too dissimilar or API rejected prompt.', 'warning');
+            } else {
+              this.showToast(message, 'success');
+            }
           }
         } else {
-          this.showToast(result.reason || 'Nothing to tidy', 'info');
+          if (!isAuto) this.showToast(result.reason || 'Nothing to tidy', 'info');
         }
       } catch (error) {
         logError('Error during tidy:', error);
@@ -2468,7 +2488,7 @@ OUTPUT FORMAT:
         log('Triggering auto-tidy');
         this.cooldown = true;
 
-        this.ui.handleTidyClick();
+        this.ui.handleTidyClick(null, true);
 
         setTimeout(() => {
           this.cooldown = false;
@@ -2495,7 +2515,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.1.3...');
+      console.log('[NeuroSort] Initializing v1.1.4...');
 
       await this.waitForDependencies();
 

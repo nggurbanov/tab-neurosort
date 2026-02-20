@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.1.1 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.2 - NeuroSort - AI-powered tab organization for Zen Browser
 // Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
@@ -2493,7 +2493,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.1.1...');
+      console.log('[NeuroSort] Initializing v1.1.2...');
 
       await this.waitForDependencies();
 

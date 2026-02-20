@@ -14,9 +14,10 @@
     },
     "homepage": "https://github.com/nggurbanov/tab-neurosort",
     "preferences": "preferences.json",
-    "readme": "README.md",
+    "readme": "https://raw.githubusercontent.com/nggurbanov/tab-neurosort/main/README.md",
+    "image": "https://raw.githubusercontent.com/nggurbanov/tab-neurosort/main/image.png",
     "author": "Tyrell",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "tags": [
         "Zen Browser",
         "tab-groups",
@@ -24,7 +25,7 @@
         "tidy-tabs"
     ],
     "createdAt": "2025-02-15",
-    "updatedAt": "2025-02-15",
+    "updatedAt": "2026-02-20",
     "fork": [
         "zen"
     ]

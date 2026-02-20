@@ -7,7 +7,8 @@
  */
 
 /* ============================================================================
-   BROOM BUTTON - Primary Styles (fallback/override)
+/* ============================================================================
+   BROOM BUTTON - Primary Styles
    ============================================================================ */
 
 /* The broom button container positioning */
@@ -15,56 +16,78 @@
   position: relative !important;
 }
 
-/* Broom button - fallback styles if JS injection fails */
+.pinned-tabs-container-separator {
+  overflow: visible !important;
+}
+
+/* Broom button styles (matches Zen native clear button) */
 #neurosort-broom {
-  position: absolute !important;
-  top: 50% !important;
-  right: 8px !important;
-  transform: translateY(-50%) !important;
-  width: 28px !important;
-  height: 28px !important;
-  padding: 4px !important;
-  border: none !important;
-  border-radius: 6px !important;
-  background: transparent !important;
-  color: var(--zen-text-secondary, #888) !important;
-  cursor: pointer !important;
+  appearance: none !important;
   opacity: 0 !important;
-  transition: opacity 0.2s ease, background 0.2s ease, transform 0.2s ease !important;
-  z-index: 1000 !important;
+  visibility: collapse !important;
+  transition: opacity 0.15s, visibility 0.15s !important;
+  border: none !important;
+  background: transparent !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  gap: 2px !important;
+  flex-shrink: 0 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
+  -moz-context-properties: fill, fill-opacity !important;
+  fill: currentColor !important;
+  color: inherit !important;
+  cursor: pointer !important;
 }
 
-#neurosort-broom:hover {
+#neurosort-broom .broom-icon {
+  width: 14px !important;
+  height: 14px !important;
+  transition: transform 0.15s ease-in-out !important;
+  transform: translateY(0px) !important;
+  fill: currentColor !important;
+}
+
+/* Hover effects */
+.pinned-tabs-container-separator:hover #neurosort-broom {
+  visibility: visible !important;
+  opacity: 0.5 !important;
+  pointer-events: auto !important;
+}
+
+.pinned-tabs-container-separator:hover #neurosort-broom:hover {
   opacity: 1 !important;
-  background: var(--zen-button-hover-bg, rgba(255,255,255,0.1)) !important;
-  color: var(--zen-text-primary, #fff) !important;
 }
 
-/* Show button when parent is hovered */
-#zen-workspaces-button:hover #neurosort-broom,
-.zen-sidebar-top:hover #neurosort-broom,
-#TabsToolbar:hover #neurosort-broom {
-  opacity: 0.7 !important;
+#neurosort-broom:active:hover .broom-icon {
+  transform: translateY(2px) !important;
 }
 
 /* Sorting state animation */
 #neurosort-broom.sorting {
   opacity: 1 !important;
-  animation: neurosort-pulse 1s ease-in-out infinite !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
 }
 
-@keyframes neurosort-pulse {
-  0%, 100% { 
-    opacity: 0.6; 
-    transform: translateY(-50%) scale(1); 
-  }
-  50% { 
-    opacity: 1; 
-    transform: translateY(-50%) scale(1.1); 
-  }
+#neurosort-broom.sorting .broom-icon {
+  animation: neurosort-sweep 0.8s ease-in-out infinite !important;
+  transform-origin: 50% 50% !important;
+}
+
+@keyframes neurosort-sweep {
+  0% { transform: rotate(0deg); }
+  20% { transform: rotate(-15deg); }
+  40% { transform: rotate(15deg); }
+  60% { transform: rotate(-15deg); }
+  80% { transform: rotate(15deg); }
+  100% { transform: rotate(0deg); }
 }
 
 /* ============================================================================

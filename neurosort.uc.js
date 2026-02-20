@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.1.0 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.1 - NeuroSort - AI-powered tab organization for Zen Browser
 // Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
@@ -123,10 +123,10 @@
 
   const formatShortcutForDisplay = (shortcut) => {
     if (!shortcut) return '';
-    
+
     const isMac = navigator.platform.toLowerCase().includes('mac');
     const parts = shortcut.toLowerCase().split('+').map(p => p.trim());
-    
+
     return parts.map(part => {
       if (part === 'ctrl' || part === 'control') {
         return isMac ? '\u2318' : 'Ctrl';
@@ -186,9 +186,9 @@
   };
 
   const generateTabId = (tab) => {
-    return tab.linkedBrowser?.browserId || 
-           tab.getAttribute('tabbrowser-tab') ||
-           `tab-${Array.from(gBrowser.tabs).indexOf(tab)}-${Date.now()}`;
+    return tab.linkedBrowser?.browserId ||
+      tab.getAttribute('tabbrowser-tab') ||
+      `tab-${Array.from(gBrowser.tabs).indexOf(tab)}-${Date.now()}`;
   };
 
   class SortHistory {
@@ -254,9 +254,9 @@
         }
       }
 
-      title = tab.getAttribute('label') || 
-              tab.querySelector('.tab-label, .tab-text')?.textContent || 
-              hostname || 'Untitled';
+      title = tab.getAttribute('label') ||
+        tab.querySelector('.tab-label, .tab-text')?.textContent ||
+        hostname || 'Untitled';
 
       if (url.startsWith('about:') || url.startsWith('chrome://')) {
         title = title || 'Internal Page';
@@ -364,7 +364,7 @@
     async withTimeout(promise, ms = 30000) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), ms);
-      
+
       try {
         const result = await promise;
         clearTimeout(timeoutId);
@@ -386,11 +386,11 @@
         } catch (error) {
           lastError = error;
           const isNetworkError = error.message?.includes('network') ||
-                                  error.message?.includes('fetch') ||
-                                  error.message?.includes('Network') ||
-                                  error.name === 'TypeError';
+            error.message?.includes('fetch') ||
+            error.message?.includes('Network') ||
+            error.name === 'TypeError';
           const isTimeout = error.message?.includes('timed out');
-          
+
           if (attempt < maxRetries && (isNetworkError || isTimeout)) {
             const delay = Math.pow(2, attempt) * 1000;
             log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`);
@@ -565,23 +565,23 @@ OUTPUT FORMAT:
     parseStreamingResponse(text) {
       const lines = text.split('\n');
       let fullContent = '';
-      
+
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.startsWith('data: ')) {
           const dataStr = trimmed.slice(6);
           if (dataStr === '[DONE]') break;
-          
+
           try {
             const data = JSON.parse(dataStr);
-            const delta = data.choices?.[0]?.delta?.content || 
-                         data.choices?.[0]?.message?.content || '';
+            const delta = data.choices?.[0]?.delta?.content ||
+              data.choices?.[0]?.message?.content || '';
             fullContent += delta;
           } catch (e) {
           }
         }
       }
-      
+
       return fullContent.trim();
     }
 
@@ -641,11 +641,11 @@ OUTPUT FORMAT:
       try {
         const data = JSON.parse(responseText);
         const content = data.choices?.[0]?.message?.content;
-        
+
         if (!content) {
           throw new Error('Empty response from API');
         }
-        
+
         return content.trim();
       } catch (e) {
         log('JSON parse failed, trying streaming parse:', e.message);
@@ -806,7 +806,7 @@ OUTPUT FORMAT:
 
       document.querySelectorAll(selector).forEach(group => {
         if (group.hasAttribute?.('zen-folder') ||
-            group.hasAttribute?.('split-view-group')) {
+          group.hasAttribute?.('split-view-group')) {
           return;
         }
         const tabs = group.querySelectorAll('tab');
@@ -842,8 +842,8 @@ OUTPUT FORMAT:
         : 'tab-group';
 
       document.querySelectorAll(selector).forEach(group => {
-        if (group.hasAttribute?.('zen-folder') || 
-            group.hasAttribute?.('split-view-group')) {
+        if (group.hasAttribute?.('zen-folder') ||
+          group.hasAttribute?.('split-view-group')) {
           return;
         }
         const label = group.getAttribute?.('label') || group.label;
@@ -859,24 +859,24 @@ OUTPUT FORMAT:
     async findOrCreateGroup(category, workspaceId) {
       const safeName = category.replace(/"/g, '\\"');
       const selector = `tab-group[label="${safeName}"]:has(tab[zen-workspace-id="${workspaceId}"])`;
-      
+
       let group = document.querySelector(selector);
-      
+
       if (group) {
         log(`Found existing group: ${category}`);
         return group;
       }
 
       log(`Creating new group: ${category}`);
-      
+
       group = document.createXULElement('tab-group');
       group.id = `neurosort-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       group.label = category;
       group.color = getNextGroupColor();
 
-      const container = window.gZenWorkspaces?.activeWorkspaceStrip || 
-                        gBrowser.tabContainer.querySelector('tabs') ||
-                        gBrowser.tabContainer;
+      const container = window.gZenWorkspaces?.activeWorkspaceStrip ||
+        gBrowser.tabContainer.querySelector('tabs') ||
+        gBrowser.tabContainer;
 
       container.insertBefore(group, container.firstChild);
 
@@ -964,7 +964,7 @@ OUTPUT FORMAT:
         try {
           const group = await this.findOrCreateGroup(category, workspaceId);
           await this.addTabsToGroup(group, groupTabs);
-          
+
           undoEntry.createdGroupIds.push(group.id);
           const tabIds = groupTabs.map(tab => ({
             tab: tab,
@@ -977,7 +977,7 @@ OUTPUT FORMAT:
             groupName: category,
             tabs: tabIds
           });
-          
+
           createdGroups.push({ name: category, tabCount: groupTabs.length });
         } catch (e) {
           logError(`Error creating group ${category}:`, e);
@@ -997,21 +997,21 @@ OUTPUT FORMAT:
 
     async undoLastSort() {
       const entry = sortHistory.pop();
-      
+
       if (!entry) {
         return { success: false, reason: 'Nothing to undo' };
       }
 
       log('Undoing sort from:', new Date(entry.timestamp));
-      
+
       let tabsUngrouped = 0;
       let groupsRemoved = 0;
       const errors = [];
 
       for (const mapping of entry.groupMappings) {
-        const group = document.getElementById(mapping.groupId) || 
-                      document.querySelector(`tab-group[id="${mapping.groupId}"]`);
-        
+        const group = document.getElementById(mapping.groupId) ||
+          document.querySelector(`tab-group[id="${mapping.groupId}"]`);
+
         if (!group) {
           log('Group not found:', mapping.groupId);
           continue;
@@ -1020,12 +1020,12 @@ OUTPUT FORMAT:
         const tabsToUngroup = [];
         for (const tabInfo of mapping.tabs) {
           let tab = tabInfo.tab;
-          
+
           if (!tab || tab.closing || !tab.parentNode) {
             const allTabs = Array.from(gBrowser.tabs);
             tab = allTabs.find(t => generateTabId(t) === tabInfo.tabId);
           }
-          
+
           if (tab && !tab.closing && tab.parentNode) {
             tabsToUngroup.push({ tab, originalIndex: tabInfo.originalIndex });
           }
@@ -1175,7 +1175,7 @@ OUTPUT FORMAT:
 
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', 'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z');
-      
+
       svg.appendChild(path);
       this.broomIcon = svg;
       return svg;
@@ -1209,7 +1209,7 @@ OUTPUT FORMAT:
       this.updateDynamicTooltip();
     }
 
-createContextMenu() {
+    createContextMenu() {
       if (this.contextMenu) {
         return this.contextMenu;
       }
@@ -1313,7 +1313,7 @@ createContextMenu() {
       if (undoItem) {
         const hasHistory = !sortHistory.isEmpty();
         undoItem.disabled = !hasHistory;
-        undoItem.label = hasHistory 
+        undoItem.label = hasHistory
           ? `Undo Last Sort (${sortHistory.getLength()} in history)`
           : 'Nothing to undo';
       }
@@ -1330,7 +1330,7 @@ createContextMenu() {
 
       try {
         const result = await this.groupManager.undoLastSort();
-        
+
         if (result.success) {
           this.showToast(
             `Undone: ${result.tabsUngrouped} tabs ungrouped, ${result.groupsRemoved} groups removed`,
@@ -1399,7 +1399,7 @@ createContextMenu() {
     showContextMenu(event) {
       const menu = this.createContextMenu();
       this.updateUndoMenuItem();
-      
+
       menu.openPopupAtScreen(
         event.screenX,
         event.screenY,
@@ -1409,6 +1409,7 @@ createContextMenu() {
 
     findInsertionPoint() {
       const selectors = [
+        '.pinned-tabs-container-separator',
         '#zen-workspaces-button',
         '.zen-sidebar-top',
         '#zen-sidebar',
@@ -1441,46 +1442,74 @@ createContextMenu() {
         return;
       }
 
-      const existing = document.getElementById('neurosort-broom');
-      if (existing) {
-        existing.remove();
-      }
+      // Zen creates multiple workspace separators dynamically. We need to attach to all of them.
+      const separators = document.querySelectorAll('.pinned-tabs-container-separator');
 
-      const button = this.createBroomButton();
+      if (separators.length === 0) {
+        log(`Could not find any pinned tab separators (retry ${retryCount}/3)`);
 
-      const insertionPoint = this.findInsertionPoint();
-      if (!insertionPoint) {
-        log(`Could not find insertion point for broom button (retry ${retryCount}/3)`);
-        
         if (retryCount < 3) {
           const delay = retryCount === 0 ? 500 : 1500;
           log(`Retrying injection after ${delay}ms...`);
           setTimeout(() => this.injectBroomButton(retryCount + 1), delay);
         } else {
           log('Max retries reached, attempting fallback injection');
+          const button = this.createBroomButton();
           this.injectBroomButtonFallback(button);
         }
         return;
       }
 
-      if (window.getComputedStyle(insertionPoint).position === 'static') {
-        insertionPoint.style.position = 'relative';
-      }
+      separators.forEach((separator, index) => {
+        // Build a unique button for each separator to avoid moving existing ones around
+        const existing = separator.querySelector('#neurosort-broom');
+        if (existing) {
+          return; // Already injected
+        }
 
-      insertionPoint.appendChild(button);
-      log('Broom button injected successfully at:', insertionPoint.id || insertionPoint.className || insertionPoint.tagName);
+        const button = this.createBroomButton().cloneNode(true);
+        // The cloned node doesn't copy event listeners, so we must attach them manually
+
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.button === 0) {
+            this.handleTidyClick(e);
+          }
+        });
+
+        button.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.showContextMenu(e);
+        });
+
+        const nativeClearButton = separator.querySelector('.zen-workspace-close-unpinned-tabs-button');
+
+        if (window.getComputedStyle(separator).position === 'static') {
+          separator.style.position = 'relative';
+        }
+
+        if (nativeClearButton) {
+          separator.insertBefore(button, nativeClearButton);
+        } else {
+          separator.appendChild(button);
+        }
+
+        log(`Broom button injected successfully at separator ${index + 1}`);
+
+        separator.addEventListener('mouseenter', () => {
+          this.isParentHovered = true;
+          this.updateBadge();
+          this.updateDynamicTooltip();
+        });
+        separator.addEventListener('mouseleave', () => {
+          this.isParentHovered = false;
+        });
+      });
 
       this.startBadgeUpdates();
-
-      const parent = insertionPoint;
-      parent.addEventListener('mouseenter', () => {
-        this.isParentHovered = true;
-        this.updateBadge();
-        this.updateDynamicTooltip();
-      });
-      parent.addEventListener('mouseleave', () => {
-        this.isParentHovered = false;
-      });
+      // Ensure we track future separators as Zen workspaces changes (handled by MutationObserver later in the file ideally)
     }
 
     injectBroomButtonFallback(button) {
@@ -1494,13 +1523,13 @@ createContextMenu() {
       for (const container of fallbackContainers) {
         if (container) {
           log('Using fallback container:', container.id || container.tagName);
-          
+
           button.style.position = 'fixed';
           button.style.top = '10px';
           button.style.right = '10px';
           button.style.opacity = '0.8';
           button.style.zIndex = '999999';
-          
+
           container.appendChild(button);
           log('Broom button injected via fallback');
           return;
@@ -1524,10 +1553,10 @@ createContextMenu() {
 
       const isCtrlShiftClick = event?.ctrlKey && event?.shiftKey;
       const isAltShiftClick = event?.altKey && event?.shiftKey;
-      
+
       let tabs;
       let mode = 'normal';
-      
+
       if (isAltShiftClick) {
         mode = 'all';
         tabs = this.getAllTabsForTidy();
@@ -1536,7 +1565,7 @@ createContextMenu() {
         const selectedTabs = gBrowser.selectedTabs || [];
         if (selectedTabs.length > 1) {
           mode = 'selected';
-          tabs = selectedTabs.filter(tab => 
+          tabs = selectedTabs.filter(tab =>
             tab && !tab.closing && !tab.hidden && !tab.pinned
           );
           this.showToast(`Tidying ${tabs.length} selected tabs...`, 'info');
@@ -1548,7 +1577,7 @@ createContextMenu() {
       } else {
         tabs = this.getUngroupedTabs();
       }
-      
+
       if (tabs.length < 2) {
         this.showToast('Not enough tabs to tidy', 'info');
         return;
@@ -1873,7 +1902,7 @@ createContextMenu() {
     updateQuickSettingsApiKey(provider, popup) {
       const keyPref = this.getApiKeyPrefForProvider(provider);
       const apikeyInput = popup.querySelector('#neurosort-qs-apikey');
-      
+
       if (!keyPref || provider === 'ollama') {
         apikeyInput.value = '';
         apikeyInput.disabled = true;
@@ -1883,7 +1912,7 @@ createContextMenu() {
         apikeyInput.disabled = false;
         apikeyInput.placeholder = 'Enter API key';
       }
-      
+
       this.updateQuickSettingsApiKeyRow(provider, popup);
     }
 
@@ -1908,11 +1937,11 @@ createContextMenu() {
 
     show() {
       if (this.modal) return;
-      
+
       this.createModal();
       document.body.appendChild(this.overlay);
       document.body.appendChild(this.modal);
-      
+
       requestAnimationFrame(() => {
         this.modal.classList.add('neurosort-welcome-visible');
         this.overlay.classList.add('neurosort-overlay-visible');
@@ -1991,7 +2020,7 @@ createContextMenu() {
 
     updateProviderConfig() {
       const configContainer = this.modal.querySelector('#neurosort-provider-config');
-      
+
       const configs = {
         openai: `
           <div class="neurosort-welcome-field">
@@ -2054,7 +2083,7 @@ createContextMenu() {
 
     saveAndClose() {
       this.savePreferences();
-      
+
       try {
         Services.prefs.setBoolPref(PREF.SETUP_COMPLETE, true);
       } catch (e) {
@@ -2070,12 +2099,12 @@ createContextMenu() {
           container.id = 'neurosort-toast-container';
           document.body.appendChild(container);
         }
-        
+
         const toast = document.createElement('div');
         toast.className = 'neurosort-toast neurosort-toast-success';
         toast.textContent = 'NeuroSort is ready! Click the broom icon to organize your tabs.';
         document.getElementById('neurosort-toast-container').appendChild(toast);
-        
+
         setTimeout(() => {
           toast.classList.add('neurosort-toast-fade');
           setTimeout(() => toast.remove(), 300);
@@ -2129,7 +2158,7 @@ createContextMenu() {
     dismiss() {
       this.modal?.classList.remove('neurosort-welcome-visible');
       this.overlay?.classList.remove('neurosort-overlay-visible');
-      
+
       setTimeout(() => {
         this.modal?.remove();
         this.overlay?.remove();
@@ -2414,7 +2443,7 @@ createContextMenu() {
 
       const threshold = getPref(PREF.AUTO_TIDY_THRESHOLD, 6);
       const cooldownSeconds = getPref(PREF.AUTO_TIDY_COOLDOWN, 30);
-      
+
       const ungroupedCount = this.ui.getUngroupedTabs().length;
 
       log(`Auto-tidy check: ${ungroupedCount} ungrouped tabs (threshold: ${threshold})`);
@@ -2450,7 +2479,7 @@ createContextMenu() {
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.1.0...');
+      console.log('[NeuroSort] Initializing v1.1.1...');
 
       await this.waitForDependencies();
 
@@ -2460,6 +2489,7 @@ createContextMenu() {
       this.checkFirstTimeSetup();
 
       this.ui.injectBroomButton();
+      this.setupWorkspaceObserver();
 
       this.setupKeyboardShortcut();
 
@@ -2470,6 +2500,43 @@ createContextMenu() {
 
       this.initialized = true;
       console.log('[NeuroSort] Initialized successfully');
+    }
+
+    setupWorkspaceObserver() {
+      // Watch for new workspace separators being created in the vertical tabs container
+      const container = document.querySelector('#tabbrowser-tabpanels') ||
+        document.querySelector('#navigator-toolbox') ||
+        document.body;
+
+      this.workspaceObserver = new MutationObserver((mutations) => {
+        let shouldReinjeect = false;
+
+        for (const mutation of mutations) {
+          if (mutation.type === 'childList') {
+            for (const node of mutation.addedNodes) {
+              // If a new separator is added, or a container that might hold one is added
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.classList?.contains('pinned-tabs-container-separator') ||
+                  node.querySelector?.('.pinned-tabs-container-separator')) {
+                  shouldReinjeect = true;
+                  break;
+                }
+              }
+            }
+          }
+          if (shouldReinjeect) break;
+        }
+
+        if (shouldReinjeect) {
+          log('New workspace container detected, re-injecting button...');
+          this.ui.injectBroomButton();
+        }
+      });
+
+      this.workspaceObserver.observe(container, {
+        childList: true,
+        subtree: true
+      });
     }
 
     checkFirstTimeSetup() {
@@ -2500,7 +2567,7 @@ createContextMenu() {
 
         const isMac = navigator.platform.toLowerCase().includes('mac');
         const isUndoKey = e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'ж';
-        
+
         if (!isUndoKey) return;
 
         let isUndoShortcut = false;

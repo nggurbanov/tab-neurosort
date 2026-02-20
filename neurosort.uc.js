@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.1.7 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.8 - NeuroSort - AI-powered tab organization for Zen Browser
 // Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
@@ -1429,14 +1429,10 @@ OUTPUT FORMAT:
       const menu = this.createContextMenu();
       this.updateUndoMenuItem();
 
-      menu.openPopup(
-        this.broomButton,
-        'after_pointer',
-        0,
-        0,
-        false,
-        false,
-        event
+      menu.openPopupAtScreen(
+        event.screenX,
+        event.screenY,
+        true
       );
     }
 
@@ -2527,7 +2523,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.1.7...');
+      console.log('[NeuroSort] Initializing v1.1.8...');
 
       await this.waitForDependencies();
 

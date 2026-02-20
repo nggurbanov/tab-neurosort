@@ -767,6 +767,7 @@ OUTPUT FORMAT:
       log('Prompt length:', prompt.length);
 
       let categories;
+      let fallbackUsed = false;
       try {
         this.lastApiCallTime = Date.now();
         const response = await this.makeRequest(prompt);
@@ -777,12 +778,15 @@ OUTPUT FORMAT:
         logError('API call failed, using fallback categorization:', error);
         categories = this.fallbackCategorize(tabsData);
         log('Fallback categories:', categories);
+        fallbackUsed = true;
       }
 
-      return tabs.map((tab, i) => ({
+      const result = tabs.map((tab, i) => ({
         tab,
         category: categories[i]
       }));
+      result.fallbackUsed = fallbackUsed;
+      return result;
     }
   }
 
@@ -991,7 +995,8 @@ OUTPUT FORMAT:
         groupsCreated: createdGroups.length,
         groups: createdGroups,
         ungrouped: tabs.length - validGroups.reduce((sum, [_, t]) => sum + t.length, 0),
-        undoEntry
+        undoEntry,
+        fallbackUsed: result.fallbackUsed
       };
     }
 
@@ -1610,7 +1615,13 @@ OUTPUT FORMAT:
           } else {
             message = `Tidied ${tabs.length} tabs into ${result.groupsCreated} groups`;
           }
-          this.showToast(message, 'success');
+
+          if (result.fallbackUsed) {
+            message += ' (Local Fallback Used. Check API settings)';
+            this.showToast(message, 'warning');
+          } else {
+            this.showToast(message, 'success');
+          }
         } else {
           this.showToast(result.reason || 'Nothing to tidy', 'info');
         }

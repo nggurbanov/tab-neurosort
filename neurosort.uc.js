@@ -294,6 +294,7 @@
     }
 
     cacheConfig() {
+      this.provider = getPref(PREF.PROVIDER, 'custom');
       switch (this.provider) {
         case 'openai':
           this.config = {
@@ -1619,6 +1620,8 @@ OUTPUT FORMAT:
           if (result.fallbackUsed) {
             message += ' (Local Fallback Used. Check API settings)';
             this.showToast(message, 'warning');
+          } else if (result.groupsCreated === 0) {
+            this.showToast('0 groups created. Tabs may be too dissimilar or API rejected prompt.', 'warning');
           } else {
             this.showToast(message, 'success');
           }

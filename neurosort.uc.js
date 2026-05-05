@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.1.10 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.11 - NeuroSort - AI-powered tab organization for Zen Browser
 // Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
@@ -1133,11 +1133,11 @@ OUTPUT FORMAT:
       return groups;
     }
 
-    async findOrCreateGroup(category, workspaceId) {
+    async findOrCreateGroup(category, workspaceId, options = {}) {
       const safeName = category.replace(/"/g, '\\"');
       const selector = `tab-group[label="${safeName}"]:has(tab[zen-workspace-id="${workspaceId}"])`;
 
-      let group = document.querySelector(selector);
+      let group = options.forceNew ? null : document.querySelector(selector);
 
       if (group) {
         log(`Found existing group: ${category}`);
@@ -1160,6 +1160,29 @@ OUTPUT FORMAT:
       await new Promise(resolve => setTimeout(resolve, 50));
 
       return group;
+    }
+
+    removeEmptyGroups(excludedGroupIds = new Set()) {
+      const workspaceId = window.gZenWorkspaces?.activeWorkspace;
+      const selector = workspaceId
+        ? `tab-group:has(tab[zen-workspace-id="${workspaceId}"])`
+        : 'tab-group';
+      let removed = 0;
+
+      document.querySelectorAll(selector).forEach(group => {
+        if (excludedGroupIds.has(group.id) ||
+          group.hasAttribute?.('zen-folder') ||
+          group.hasAttribute?.('split-view-group')) {
+          return;
+        }
+
+        if (group.querySelectorAll('tab').length === 0) {
+          group.remove();
+          removed++;
+        }
+      });
+
+      return removed;
     }
 
     async addTabsToGroup(group, tabs) {
@@ -1189,7 +1212,7 @@ OUTPUT FORMAT:
       }
     }
 
-    async organizeTabs(tabs) {
+    async organizeTabs(tabs, options = {}) {
       if (!tabs || tabs.length === 0) {
         log('No tabs to organize');
         return { success: false, reason: 'No tabs to organize' };
@@ -1198,7 +1221,8 @@ OUTPUT FORMAT:
       const minGroupSize = getPref(PREF.MIN_GROUP_SIZE, 2);
       const workspaceId = window.gZenWorkspaces?.activeWorkspace;
 
-      const existingGroups = getPref(PREF.USE_EXISTING_GROUPS, true)
+      const useExistingGroups = options.useExistingGroups === true;
+      const existingGroups = useExistingGroups && getPref(PREF.USE_EXISTING_GROUPS, false)
         ? this.getExistingGroups()
         : [];
 
@@ -1240,7 +1264,9 @@ OUTPUT FORMAT:
       const tabIndexMap = new Map(Array.from(gBrowser.tabs).map((tab, index) => [tab, index]));
       for (const [category, groupTabs] of validGroups) {
         try {
-          const group = await this.findOrCreateGroup(category, workspaceId);
+          const group = await this.findOrCreateGroup(category, workspaceId, {
+            forceNew: options.forceNewGroups === true
+          });
           await this.addTabsToGroup(group, groupTabs);
 
           undoEntry.createdGroupIds.push(group.id);
@@ -1262,6 +1288,10 @@ OUTPUT FORMAT:
         }
       }
 
+      const removedEmptyGroups = options.cleanupEmptyGroups
+        ? this.removeEmptyGroups(new Set(undoEntry.createdGroupIds))
+        : 0;
+
       sortHistory.push(undoEntry);
 
       return {
@@ -1269,6 +1299,7 @@ OUTPUT FORMAT:
         groupsCreated: createdGroups.length,
         groups: createdGroups,
         ungrouped: tabs.length - validGroups.reduce((sum, [_, t]) => sum + t.length, 0),
+        removedEmptyGroups,
         undoEntry,
         fallbackUsed: result.fallbackUsed
       };
@@ -1892,7 +1923,11 @@ OUTPUT FORMAT:
       }
 
       try {
-        const result = await this.groupManager.organizeTabs(tabs);
+        const result = await this.groupManager.organizeTabs(tabs, {
+          useExistingGroups: false,
+          forceNewGroups: mode === 'all',
+          cleanupEmptyGroups: mode === 'all'
+        });
 
         if (result.rateLimited) {
           if (!isAuto) this.showToast(`Rate limited, please wait ${Math.ceil(result.waitTime / 1000)}s...`, 'info');
@@ -1903,6 +1938,9 @@ OUTPUT FORMAT:
           let message;
           if (mode === 'all') {
             message = `Tidied ALL ${tabs.length} tabs into ${result.groupsCreated} groups`;
+            if (result.removedEmptyGroups) {
+              message += `, removed ${result.removedEmptyGroups} empty old groups`;
+            }
           } else if (mode === 'selected') {
             message = `Tidied ${tabs.length} selected tabs into ${result.groupsCreated} groups`;
           } else {
@@ -2789,7 +2827,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.1.10...');
+      console.log('[NeuroSort] Initializing v1.1.11...');
 
       await this.waitForDependencies();
 
@@ -3350,6 +3388,6 @@ OUTPUT FORMAT:
   setTimeout(() => neurosort.init(), 1000);
   setTimeout(() => neurosort.init(), 3000);
 
-  console.log('[NeuroSort] Script loaded v1.1.10');
+  console.log('[NeuroSort] Script loaded v1.1.11');
 
 })();

@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.1.8 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.9 - NeuroSort - AI-powered tab organization for Zen Browser
 // Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
@@ -47,6 +47,25 @@
 
     // Setup
     SETUP_COMPLETE: 'extensions.neurosort.setup_complete',
+  };
+
+  const AI_CHUNK_SIZE = 60;
+  const LARGE_BATCH_THRESHOLD = 80;
+  const METADATA_BATCH_SIZE = 40;
+  const DEFAULT_MAX_GROUP_SIZE = 24;
+  const STRICT_MAX_GROUP_SIZE = 18;
+  const GENEROUS_GROUP_LIMITS = {
+    youtube: 60,
+  };
+
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const chunkArray = (items, size) => {
+    const chunks = [];
+    for (let i = 0; i < items.length; i += size) {
+      chunks.push(items.slice(i, i + size));
+    }
+    return chunks;
   };
 
   // ============================================================================
@@ -232,7 +251,7 @@
   // TAB DATA COLLECTION
   // ============================================================================
 
-  const getTabData = async (tab) => {
+  const getTabData = async (tab, options = {}) => {
     if (!tab || !tab.isConnected) {
       return { title: 'Invalid Tab', url: '', description: '', hostname: '' };
     }
@@ -264,7 +283,8 @@
         return { title, url, description, hostname };
       }
 
-      if (getPref(PREF.FETCH_DESCRIPTIONS, true)) {
+      const fetchDescriptions = options.fetchDescriptions ?? getPref(PREF.FETCH_DESCRIPTIONS, true);
+      if (fetchDescriptions) {
         try {
           if (browser?.contentDocument) {
             const metaDesc = browser.contentDocument.querySelector('meta[name="description"]');
@@ -280,6 +300,22 @@
     }
 
     return { title, url, description, hostname };
+  };
+
+  const collectTabsData = async (tabs, options = {}) => {
+    const results = [];
+    const batches = chunkArray(tabs, options.batchSize || METADATA_BATCH_SIZE);
+    const fetchDescriptions = options.fetchDescriptions ?? true;
+
+    for (const batch of batches) {
+      const batchData = await Promise.all(batch.map(tab => getTabData(tab, { fetchDescriptions })));
+      results.push(...batchData);
+      if (batches.length > 1) {
+        await sleep(0);
+      }
+    }
+
+    return results;
   };
 
   // ============================================================================
@@ -445,6 +481,73 @@
       return sorted;
     }
 
+    getHostname(url) {
+      if (!url || url.startsWith('about:') || url.startsWith('chrome://')) {
+        return '';
+      }
+      try {
+        return new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+      } catch (e) {
+        return '';
+      }
+    }
+
+    getDomainKey(label) {
+      return (label || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+
+    getMaxGroupSize(category) {
+      const key = this.getDomainKey(category);
+      return GENEROUS_GROUP_LIMITS[key] || DEFAULT_MAX_GROUP_SIZE;
+    }
+
+    collectCategorySignals(data) {
+      const text = `${data.title || ''} ${data.hostname || ''} ${data.url || ''}`.toLowerCase();
+      const signals = new Set();
+
+      const repoMatch = text.match(/github\.com\/([^\s/?#]+)\/([^\s/?#]+)/i);
+      if (repoMatch) {
+        signals.add(`github:${repoMatch[1]}/${repoMatch[2]}`.toLowerCase());
+      }
+      if (/pull\/\d+|\/pulls\b|pull request|\bpr\b/.test(text)) {
+        signals.add('pull-requests');
+      }
+      if (/issues\/\d+|\/issues\b|\bissue\b/.test(text)) {
+        signals.add('issues');
+      }
+      if (/docs|documentation|reference|api/.test(text)) {
+        signals.add('docs');
+      }
+      if (/youtube\.com|youtu\.be/.test(text)) {
+        signals.add('youtube');
+      }
+      if (/watch\?|playlist|shorts\//.test(text)) {
+        signals.add('video-content');
+      }
+      if (/search|query|results/.test(text)) {
+        signals.add('search');
+      }
+
+      const hostname = this.getHostname(data.url);
+      if (hostname) {
+        signals.add(`host:${hostname}`);
+      }
+
+      return signals;
+    }
+
+    shouldSplitLargeCategory(category, items) {
+      const maxSize = this.getMaxGroupSize(category);
+      if (items.length <= maxSize) return false;
+
+      const key = this.getDomainKey(category);
+      if (GENEROUS_GROUP_LIMITS[key] && items.length <= GENEROUS_GROUP_LIMITS[key]) {
+        return false;
+      }
+
+      return true;
+    }
+
     groupByDomain(tabsData) {
       const groups = {};
       tabsData.forEach((data, i) => {
@@ -474,7 +577,7 @@
       return result.join('\n');
     }
 
-    buildPrompt(tabsData, existingGroups = []) {
+    buildPrompt(tabsData, existingGroups = [], context = {}) {
       const existingGroupsList = existingGroups.length > 0
         ? existingGroups.map(g => `- ${g}`).join('\n')
         : 'None';
@@ -485,14 +588,19 @@
         : 'None';
 
       const tabsList = tabsData.map((data, i) => {
+        const tabNumber = context.startIndex ? context.startIndex + i + 1 : i + 1;
         const parts = [`${i + 1}. Title: "${data.title}"`];
         const domain = this.extractDomain(data.url);
         if (domain) {
           parts.push(`   Domain: "${domain}"`);
         }
+        if (data.hostname) {
+          parts.push(`   Host: "${data.hostname}"`);
+        }
         if (data.description && data.description.length > 10) {
           parts.push(`   Desc: "${data.description.substring(0, 80)}"`);
         }
+        parts.push(`   Global Tab #: ${tabNumber}`);
         return parts.join('\n');
       }).join('\n\n');
 
@@ -507,11 +615,13 @@ TABS TO CATEGORIZE:
 ${tabsList}
 
 INSTRUCTIONS:
-1. Assign each tab to a concise category (1-3 words, Title Case)
-2. Prefer existing categories when appropriate - use the EXACT same name
-3. For new categories, prioritize the website/domain name or main topic
-4. Be consistent - similar tabs should get the same category
-5. Examples: "GitHub", "YouTube", "Documentation", "News", "Shopping", "Social Media"
+1. Assign each tab to a concise category (1-4 words, Title Case)
+2. Prefer smaller, precise groups over broad buckets.
+3. Do NOT put all tabs from a broad site into one group unless they are clearly the same activity.
+4. GitHub tabs should be split by repo, PRs, issues, docs, or project when possible. Avoid a giant "GitHub" group.
+5. A large "YouTube" group is acceptable when tabs are just videos/playlists from YouTube.
+6. Prefer existing categories only when the tab genuinely fits the exact topic.
+7. Examples: "Repo PRs", "Project Docs", "YouTube", "Shopping", "News", "Design Research"
 
 OUTPUT FORMAT:
 - Output exactly ONE category per line
@@ -552,6 +662,89 @@ OUTPUT FORMAT:
           .join(' ')
           .substring(0, 30);
       });
+    }
+
+    async categorizeChunk(tabsData, existingGroups, startIndex) {
+      const prompt = this.buildPrompt(tabsData, existingGroups, { startIndex });
+      log('Prompt length:', prompt.length, 'chunk size:', tabsData.length);
+      const response = await this.makeRequest(prompt);
+      log('AI Response:', response);
+      return this.parseResponse(response, tabsData.length);
+    }
+
+    splitLargeCategories(categorizations, tabsData) {
+      const grouped = new Map();
+      categorizations.forEach((item, index) => {
+        if (!grouped.has(item.category)) {
+          grouped.set(item.category, []);
+        }
+        grouped.get(item.category).push({ ...item, index, data: tabsData[index] });
+      });
+
+      const nextCategories = new Map();
+      for (const [category, items] of grouped.entries()) {
+        if (!this.shouldSplitLargeCategory(category, items)) continue;
+
+        const signalBuckets = new Map();
+        for (const item of items) {
+          const signals = Array.from(this.collectCategorySignals(item.data));
+          const signal = signals.find(value => value.startsWith('github:')) ||
+            signals.find(value => value === 'pull-requests') ||
+            signals.find(value => value === 'issues') ||
+            signals.find(value => value === 'docs') ||
+            signals.find(value => value === 'youtube') ||
+            signals.find(value => value.startsWith('host:')) ||
+            'misc';
+
+          if (!signalBuckets.has(signal)) {
+            signalBuckets.set(signal, []);
+          }
+          signalBuckets.get(signal).push(item);
+        }
+
+        if (signalBuckets.size <= 1) {
+          const maxSize = this.getMaxGroupSize(category);
+          items.forEach((item, i) => {
+            const suffix = Math.floor(i / maxSize) + 1;
+            nextCategories.set(item.index, suffix === 1 ? category : `${category} ${suffix}`);
+          });
+          continue;
+        }
+
+        for (const [signal, bucket] of signalBuckets.entries()) {
+          const maxSize = signal === 'youtube' ? GENEROUS_GROUP_LIMITS.youtube : STRICT_MAX_GROUP_SIZE;
+          bucket.forEach((item, i) => {
+            const suffix = Math.floor(i / maxSize) + 1;
+            const label = this.labelForSignal(category, signal);
+            nextCategories.set(item.index, suffix === 1 ? label : `${label} ${suffix}`);
+          });
+        }
+      }
+
+      if (nextCategories.size === 0) {
+        return categorizations;
+      }
+
+      return categorizations.map((item, index) => ({
+        ...item,
+        category: nextCategories.get(index) || item.category
+      }));
+    }
+
+    labelForSignal(category, signal) {
+      if (signal.startsWith('github:')) {
+        const repo = signal.slice('github:'.length).split('/').pop();
+        return repo ? `GitHub ${repo}`.substring(0, 30) : 'GitHub Repo';
+      }
+      if (signal === 'pull-requests') return `${category} PRs`.substring(0, 30);
+      if (signal === 'issues') return `${category} Issues`.substring(0, 30);
+      if (signal === 'docs') return `${category} Docs`.substring(0, 30);
+      if (signal === 'youtube') return 'YouTube';
+      if (signal.startsWith('host:')) {
+        const host = signal.slice('host:'.length).split('.')[0];
+        return host ? `${category} ${host}`.substring(0, 30) : category;
+      }
+      return category;
     }
 
     async makeRequest(prompt) {
@@ -777,19 +970,24 @@ OUTPUT FORMAT:
         return { rateLimited: true, waitTime: rateLimit.waitTime };
       }
 
-      const tabsData = await Promise.all(tabs.map(tab => getTabData(tab)));
+      const largeBatch = tabs.length >= LARGE_BATCH_THRESHOLD;
+      const fetchDescriptions = !largeBatch && getPref(PREF.FETCH_DESCRIPTIONS, true);
+      const tabsData = await collectTabsData(tabs, { fetchDescriptions });
       log('Tab data collected:', tabsData);
-
-      const prompt = this.buildPrompt(tabsData, existingGroups);
-      log('Prompt length:', prompt.length);
 
       let categories;
       let fallbackUsed = false;
       try {
         this.lastApiCallTime = Date.now();
-        const response = await this.makeRequest(prompt);
-        log('AI Response:', response);
-        categories = this.parseResponse(response, tabs.length);
+        const chunks = chunkArray(tabsData, AI_CHUNK_SIZE);
+        categories = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const chunkCategories = await this.categorizeChunk(chunks[i], existingGroups, i * AI_CHUNK_SIZE);
+          categories.push(...chunkCategories);
+          if (i < chunks.length - 1) {
+            await sleep(250);
+          }
+        }
         log('Parsed categories:', categories);
       } catch (error) {
         logError('API call failed, using fallback categorization:', error);
@@ -802,8 +1000,9 @@ OUTPUT FORMAT:
         tab,
         category: categories[i]
       }));
-      result.fallbackUsed = fallbackUsed;
-      return result;
+      const splitResult = this.splitLargeCategories(result, tabsData);
+      splitResult.fallbackUsed = fallbackUsed;
+      return splitResult;
     }
   }
 
@@ -981,6 +1180,7 @@ OUTPUT FORMAT:
       };
 
       const createdGroups = [];
+      const tabIndexMap = new Map(Array.from(gBrowser.tabs).map((tab, index) => [tab, index]));
       for (const [category, groupTabs] of validGroups) {
         try {
           const group = await this.findOrCreateGroup(category, workspaceId);
@@ -990,7 +1190,7 @@ OUTPUT FORMAT:
           const tabIds = groupTabs.map(tab => ({
             tab: tab,
             tabId: generateTabId(tab),
-            originalIndex: Array.from(gBrowser.tabs).indexOf(tab),
+            originalIndex: tabIndexMap.get(tab) ?? -1,
             originalParent: tab.parentElement
           }));
           undoEntry.groupMappings.push({
@@ -1617,6 +1817,11 @@ OUTPUT FORMAT:
         return;
       }
 
+      const largeBatch = tabs.length >= LARGE_BATCH_THRESHOLD;
+      if (largeBatch && !isAuto) {
+        this.showToast(`Large tidy: processing ${tabs.length} tabs in fast mode...`, 'info');
+      }
+
       this.isSorting = true;
       this.setLoading(true);
       this.broomButton?.classList.add('sorting');
@@ -1625,7 +1830,9 @@ OUTPUT FORMAT:
       } else if (mode === 'selected') {
         this.broomButton?.classList.add('neurosort-tidy-selected');
       }
-      this.setTabsSorting(tabs, true);
+      if (!largeBatch) {
+        this.setTabsSorting(tabs, true);
+      }
 
       try {
         const result = await this.groupManager.organizeTabs(tabs);
@@ -1673,7 +1880,9 @@ OUTPUT FORMAT:
         this.broomButton?.classList.remove('sorting');
         this.broomButton?.classList.remove('neurosort-tidy-all');
         this.broomButton?.classList.remove('neurosort-tidy-selected');
-        this.setTabsSorting(tabs, false);
+        if (!largeBatch) {
+          this.setTabsSorting(tabs, false);
+        }
         this.updateBadge();
         this.updateDynamicTooltip();
       }
@@ -2523,7 +2732,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.1.8...');
+      console.log('[NeuroSort] Initializing v1.1.9...');
 
       await this.waitForDependencies();
 
@@ -3084,6 +3293,6 @@ OUTPUT FORMAT:
   setTimeout(() => neurosort.init(), 1000);
   setTimeout(() => neurosort.init(), 3000);
 
-  console.log('[NeuroSort] Script loaded v1.1.0');
+  console.log('[NeuroSort] Script loaded v1.1.9');
 
 })();

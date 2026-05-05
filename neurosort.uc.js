@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.1.9 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.10 - NeuroSort - AI-powered tab organization for Zen Browser
 // Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
@@ -505,6 +505,28 @@
       const text = `${data.title || ''} ${data.hostname || ''} ${data.url || ''}`.toLowerCase();
       const signals = new Set();
 
+      if (/logo|animation|design|image|video generation/.test(text)) {
+        signals.add('creative-work');
+      }
+      if (/gemini|chatgpt|claude|perplexity|copilot|ai studio/.test(text)) {
+        signals.add('ai-tools');
+      }
+      if (/sheets|spreadsheet|таблиц|плат[её]ж|invoice|billing|payment/.test(text)) {
+        signals.add('spreadsheets');
+      }
+      if (/gmail|mail\.google|inbox|email|почт/.test(text)) {
+        signals.add('email');
+      }
+      if (/search|google search|поиск|query|results|nano banana|banana/.test(text)) {
+        signals.add('search');
+      }
+      if (/baidu|文心|assistant|助手/.test(text)) {
+        signals.add('baidu');
+      }
+      if (/hostvds|timeweb|server|vps|hosting|сервер|прокси|proxy/.test(text)) {
+        signals.add('hosting');
+      }
+
       const repoMatch = text.match(/github\.com\/([^\s/?#]+)\/([^\s/?#]+)/i);
       if (repoMatch) {
         signals.add(`github:${repoMatch[1]}/${repoMatch[2]}`.toLowerCase());
@@ -524,10 +546,6 @@
       if (/watch\?|playlist|shorts\//.test(text)) {
         signals.add('video-content');
       }
-      if (/search|query|results/.test(text)) {
-        signals.add('search');
-      }
-
       const hostname = this.getHostname(data.url);
       if (hostname) {
         signals.add(`host:${hostname}`);
@@ -546,6 +564,34 @@
       }
 
       return true;
+    }
+
+    isBroadDomainCategory(category, items) {
+      const key = this.getDomainKey(category);
+      if (!key || GENEROUS_GROUP_LIMITS[key]) return false;
+
+      return items.some(item => {
+        const domain = this.extractDomain(item.data?.url || '');
+        return this.getDomainKey(domain) === key;
+      });
+    }
+
+    primarySignalForItem(item) {
+      const signals = Array.from(this.collectCategorySignals(item.data));
+      return signals.find(value => value.startsWith('github:')) ||
+        signals.find(value => value === 'pull-requests') ||
+        signals.find(value => value === 'issues') ||
+        signals.find(value => value === 'spreadsheets') ||
+        signals.find(value => value === 'email') ||
+        signals.find(value => value === 'ai-tools') ||
+        signals.find(value => value === 'creative-work') ||
+        signals.find(value => value === 'hosting') ||
+        signals.find(value => value === 'baidu') ||
+        signals.find(value => value === 'search') ||
+        signals.find(value => value === 'docs') ||
+        signals.find(value => value === 'youtube') ||
+        signals.find(value => value.startsWith('host:')) ||
+        'misc';
     }
 
     groupByDomain(tabsData) {
@@ -609,19 +655,20 @@
 EXISTING CATEGORIES (use these exact names if a tab fits):
 ${existingGroupsList}
 
-FREQUENT DOMAINS: ${frequentDomainsList}
+FREQUENT DOMAINS (context only; do not use as category names unless the task is truly the same): ${frequentDomainsList}
 
 TABS TO CATEGORIZE:
 ${tabsList}
 
 INSTRUCTIONS:
 1. Assign each tab to a concise category (1-4 words, Title Case)
-2. Prefer smaller, precise groups over broad buckets.
-3. Do NOT put all tabs from a broad site into one group unless they are clearly the same activity.
-4. GitHub tabs should be split by repo, PRs, issues, docs, or project when possible. Avoid a giant "GitHub" group.
-5. A large "YouTube" group is acceptable when tabs are just videos/playlists from YouTube.
-6. Prefer existing categories only when the tab genuinely fits the exact topic.
-7. Examples: "Repo PRs", "Project Docs", "YouTube", "Shopping", "News", "Design Research"
+2. Prefer intent/topic groups over website-owner groups.
+3. Avoid generic categories like "Google", "GitHub", "Cloudflare", "Reddit", or "Misc" when tabs are about different tasks.
+4. Split Google tabs by task/product/topic, e.g. "AI Tools", "Spreadsheets", "Search", "Email", "Design Research".
+5. GitHub tabs should be split by repo, PRs, issues, docs, or project when possible. Avoid a giant "GitHub" group.
+6. A large "YouTube" group is acceptable when tabs are just videos/playlists from YouTube.
+7. Prefer existing categories only when the tab genuinely fits the exact topic.
+8. Examples: "Repo PRs", "Project Docs", "AI Tools", "Spreadsheets", "Hosting", "Search", "YouTube"
 
 OUTPUT FORMAT:
 - Output exactly ONE category per line
@@ -683,18 +730,12 @@ OUTPUT FORMAT:
 
       const nextCategories = new Map();
       for (const [category, items] of grouped.entries()) {
-        if (!this.shouldSplitLargeCategory(category, items)) continue;
+        const shouldSplit = this.shouldSplitLargeCategory(category, items) || this.isBroadDomainCategory(category, items);
+        if (!shouldSplit) continue;
 
         const signalBuckets = new Map();
         for (const item of items) {
-          const signals = Array.from(this.collectCategorySignals(item.data));
-          const signal = signals.find(value => value.startsWith('github:')) ||
-            signals.find(value => value === 'pull-requests') ||
-            signals.find(value => value === 'issues') ||
-            signals.find(value => value === 'docs') ||
-            signals.find(value => value === 'youtube') ||
-            signals.find(value => value.startsWith('host:')) ||
-            'misc';
+          const signal = this.primarySignalForItem(item);
 
           if (!signalBuckets.has(signal)) {
             signalBuckets.set(signal, []);
@@ -740,11 +781,27 @@ OUTPUT FORMAT:
       if (signal === 'issues') return `${category} Issues`.substring(0, 30);
       if (signal === 'docs') return `${category} Docs`.substring(0, 30);
       if (signal === 'youtube') return 'YouTube';
+      if (signal === 'ai-tools') return 'AI Tools';
+      if (signal === 'spreadsheets') return 'Spreadsheets';
+      if (signal === 'email') return 'Email';
+      if (signal === 'creative-work') return 'Creative Work';
+      if (signal === 'hosting') return 'Hosting';
+      if (signal === 'baidu') return 'Baidu';
+      if (signal === 'search') return 'Search';
       if (signal.startsWith('host:')) {
         const host = signal.slice('host:'.length).split('.')[0];
-        return host ? `${category} ${host}`.substring(0, 30) : category;
+        return host ? this.titleFromHost(host) : category;
       }
       return category;
+    }
+
+    titleFromHost(host) {
+      return host
+        .split(/[-_]/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ')
+        .substring(0, 30) || 'Web';
     }
 
     async makeRequest(prompt) {
@@ -2732,7 +2789,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.1.9...');
+      console.log('[NeuroSort] Initializing v1.1.10...');
 
       await this.waitForDependencies();
 
@@ -3293,6 +3350,6 @@ OUTPUT FORMAT:
   setTimeout(() => neurosort.init(), 1000);
   setTimeout(() => neurosort.init(), 3000);
 
-  console.log('[NeuroSort] Script loaded v1.1.9');
+  console.log('[NeuroSort] Script loaded v1.1.10');
 
 })();

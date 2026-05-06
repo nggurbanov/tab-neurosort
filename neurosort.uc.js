@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.1.11 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.12 - NeuroSort - AI-powered tab organization for Zen Browser
 // Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
@@ -54,9 +54,7 @@
   const METADATA_BATCH_SIZE = 40;
   const DEFAULT_MAX_GROUP_SIZE = 24;
   const STRICT_MAX_GROUP_SIZE = 18;
-  const GENEROUS_GROUP_LIMITS = {
-    youtube: 60,
-  };
+  const YOUTUBE_MAX_GROUP_SIZE = 12;
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -498,7 +496,38 @@
 
     getMaxGroupSize(category) {
       const key = this.getDomainKey(category);
-      return GENEROUS_GROUP_LIMITS[key] || DEFAULT_MAX_GROUP_SIZE;
+      if (key.includes('youtube') || key.includes('video')) return YOUTUBE_MAX_GROUP_SIZE;
+      return DEFAULT_MAX_GROUP_SIZE;
+    }
+
+    youtubeTopicSignal(data) {
+      const text = `${data.title || ''} ${data.url || ''}`.toLowerCase();
+
+      if (/music|song|album|mix|playlist|live set|concert|remix|dj/.test(text)) return 'youtube:music';
+      if (/podcast|interview|talk|conversation|lex fridman|joe rogan/.test(text)) return 'youtube:podcasts';
+      if (/review|vs\b|comparison|hands on|unboxing|benchmark/.test(text)) return 'youtube:reviews';
+      if (/cooking|recipe|food|kitchen|chef|cook\b/.test(text)) return 'youtube:cooking';
+      if (/game|gaming|minecraft|elden|valorant|league of legends|stream/.test(text)) return 'youtube:gaming';
+      if (/documentary|history|science|space|physics|biology/.test(text)) return 'youtube:documentary';
+      if (/coding|programming|developer|javascript|typescript|python|react|agent|ai coding|cursor|claude code|github|openai|llm/.test(text)) return 'youtube:coding-ai';
+      if (/news|analysis|politics|economy|market|war|breaking/.test(text)) return 'youtube:news';
+      if (/workout|fitness|gym|yoga|health|nutrition/.test(text)) return 'youtube:fitness';
+      if (/movie|film|trailer|cinema|scene|anime|show/.test(text)) return 'youtube:film';
+      if (/tutorial|guide|how to|course|lesson|explained|learn/.test(text)) return 'youtube:tutorials';
+
+      const channelMatch = (data.title || '').match(/\|\s*([^|]+)$/) || (data.title || '').match(/-\s*([^-]+)$/);
+      if (channelMatch && channelMatch[1]) {
+        const channel = channelMatch[1]
+          .replace(/youtube|official|channel/ig, '')
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9а-яё]+/gi, '-');
+        if (channel && channel.length > 2 && channel.length < 24) {
+          return `youtube:${channel}`;
+        }
+      }
+
+      return 'youtube:videos';
     }
 
     collectCategorySignals(data) {
@@ -541,7 +570,7 @@
         signals.add('docs');
       }
       if (/youtube\.com|youtu\.be/.test(text)) {
-        signals.add('youtube');
+        signals.add(this.youtubeTopicSignal(data));
       }
       if (/watch\?|playlist|shorts\//.test(text)) {
         signals.add('video-content');
@@ -558,17 +587,12 @@
       const maxSize = this.getMaxGroupSize(category);
       if (items.length <= maxSize) return false;
 
-      const key = this.getDomainKey(category);
-      if (GENEROUS_GROUP_LIMITS[key] && items.length <= GENEROUS_GROUP_LIMITS[key]) {
-        return false;
-      }
-
       return true;
     }
 
     isBroadDomainCategory(category, items) {
       const key = this.getDomainKey(category);
-      if (!key || GENEROUS_GROUP_LIMITS[key]) return false;
+      if (!key) return false;
 
       return items.some(item => {
         const domain = this.extractDomain(item.data?.url || '');
@@ -578,7 +602,8 @@
 
     primarySignalForItem(item) {
       const signals = Array.from(this.collectCategorySignals(item.data));
-      return signals.find(value => value.startsWith('github:')) ||
+      return signals.find(value => value.startsWith('youtube:')) ||
+        signals.find(value => value.startsWith('github:')) ||
         signals.find(value => value === 'pull-requests') ||
         signals.find(value => value === 'issues') ||
         signals.find(value => value === 'spreadsheets') ||
@@ -589,7 +614,6 @@
         signals.find(value => value === 'baidu') ||
         signals.find(value => value === 'search') ||
         signals.find(value => value === 'docs') ||
-        signals.find(value => value === 'youtube') ||
         signals.find(value => value.startsWith('host:')) ||
         'misc';
     }
@@ -666,9 +690,9 @@ INSTRUCTIONS:
 3. Avoid generic categories like "Google", "GitHub", "Cloudflare", "Reddit", or "Misc" when tabs are about different tasks.
 4. Split Google tabs by task/product/topic, e.g. "AI Tools", "Spreadsheets", "Search", "Email", "Design Research".
 5. GitHub tabs should be split by repo, PRs, issues, docs, or project when possible. Avoid a giant "GitHub" group.
-6. A large "YouTube" group is acceptable when tabs are just videos/playlists from YouTube.
+6. YouTube tabs must be split by topic, channel, series, or intent. Avoid generic "YouTube" unless there are only a few miscellaneous videos.
 7. Prefer existing categories only when the tab genuinely fits the exact topic.
-8. Examples: "Repo PRs", "Project Docs", "AI Tools", "Spreadsheets", "Hosting", "Search", "YouTube"
+8. Examples: "AI Coding Videos", "Music", "Tech Reviews", "Tutorials", "Podcasts", "Repo PRs", "Project Docs"
 
 OUTPUT FORMAT:
 - Output exactly ONE category per line
@@ -744,16 +768,20 @@ OUTPUT FORMAT:
         }
 
         if (signalBuckets.size <= 1) {
-          const maxSize = this.getMaxGroupSize(category);
+          const onlySignal = Array.from(signalBuckets.keys())[0];
+          const label = onlySignal?.startsWith('youtube:')
+            ? this.labelForSignal(category, onlySignal)
+            : category;
+          const maxSize = this.getMaxGroupSize(label);
           items.forEach((item, i) => {
             const suffix = Math.floor(i / maxSize) + 1;
-            nextCategories.set(item.index, suffix === 1 ? category : `${category} ${suffix}`);
+            nextCategories.set(item.index, suffix === 1 ? label : `${label} ${suffix}`);
           });
           continue;
         }
 
         for (const [signal, bucket] of signalBuckets.entries()) {
-          const maxSize = signal === 'youtube' ? GENEROUS_GROUP_LIMITS.youtube : STRICT_MAX_GROUP_SIZE;
+          const maxSize = signal.startsWith('youtube:') ? YOUTUBE_MAX_GROUP_SIZE : STRICT_MAX_GROUP_SIZE;
           bucket.forEach((item, i) => {
             const suffix = Math.floor(i / maxSize) + 1;
             const label = this.labelForSignal(category, signal);
@@ -780,7 +808,7 @@ OUTPUT FORMAT:
       if (signal === 'pull-requests') return `${category} PRs`.substring(0, 30);
       if (signal === 'issues') return `${category} Issues`.substring(0, 30);
       if (signal === 'docs') return `${category} Docs`.substring(0, 30);
-      if (signal === 'youtube') return 'YouTube';
+      if (signal.startsWith('youtube:')) return this.labelForYouTubeSignal(signal);
       if (signal === 'ai-tools') return 'AI Tools';
       if (signal === 'spreadsheets') return 'Spreadsheets';
       if (signal === 'email') return 'Email';
@@ -793,6 +821,27 @@ OUTPUT FORMAT:
         return host ? this.titleFromHost(host) : category;
       }
       return category;
+    }
+
+    labelForYouTubeSignal(signal) {
+      const topic = signal.slice('youtube:'.length);
+      const labels = {
+        'coding-ai': 'AI Coding Videos',
+        music: 'Music Videos',
+        podcasts: 'Podcasts',
+        reviews: 'Reviews',
+        tutorials: 'Tutorials',
+        news: 'News Videos',
+        fitness: 'Fitness Videos',
+        cooking: 'Cooking Videos',
+        gaming: 'Gaming Videos',
+        film: 'Film Videos',
+        documentary: 'Documentaries',
+        videos: 'Misc Videos'
+      };
+
+      if (labels[topic]) return labels[topic];
+      return this.titleFromHost(topic).replace(/\bVideos?$/i, '').trim().substring(0, 24) || 'YouTube Videos';
     }
 
     titleFromHost(host) {
@@ -2827,7 +2876,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.1.11...');
+      console.log('[NeuroSort] Initializing v1.1.12...');
 
       await this.waitForDependencies();
 
@@ -3388,6 +3437,6 @@ OUTPUT FORMAT:
   setTimeout(() => neurosort.init(), 1000);
   setTimeout(() => neurosort.init(), 3000);
 
-  console.log('[NeuroSort] Script loaded v1.1.11');
+  console.log('[NeuroSort] Script loaded v1.1.12');
 
 })();

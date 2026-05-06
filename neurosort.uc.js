@@ -2,7 +2,7 @@
 // @name           NeuroSort
 // @ignorecache
 // ==/UserScript==
-// VERSION 1.1.12 - NeuroSort - AI-powered tab organization for Zen Browser
+// VERSION 1.1.13 - NeuroSort - AI-powered tab organization for Zen Browser
 // Features: Undo support, context menu, history, group stats, domain-based categorization fallback, rate limiting
 (() => {
   'use strict';
@@ -494,6 +494,37 @@
       return (label || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     }
 
+    normalizeCategoryKey(category) {
+      return (category || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9а-яё]+/gi, ' ')
+        .trim()
+        .replace(/\s+/g, ' ');
+    }
+
+    stripCategoryNumericSuffix(category) {
+      return (category || '')
+        .replace(/\s*(?:#?\d+|\(\d+\))\s*$/i, '')
+        .trim();
+    }
+
+    isGenericYouTubeCategory(category) {
+      const key = this.normalizeCategoryKey(this.stripCategoryNumericSuffix(category));
+      return key === 'youtube' ||
+        key === 'you tube' ||
+        key === 'youtube videos' ||
+        key === 'you tube videos' ||
+        key === 'yt' ||
+        key === 'yt videos';
+    }
+
+    isYouTubeTabData(data) {
+      const hostname = this.getHostname(data?.url || '');
+      return hostname === 'youtube.com' ||
+        hostname.endsWith('.youtube.com') ||
+        hostname === 'youtu.be';
+    }
+
     getMaxGroupSize(category) {
       const key = this.getDomainKey(category);
       if (key.includes('youtube') || key.includes('video')) return YOUTUBE_MAX_GROUP_SIZE;
@@ -519,6 +550,17 @@
       if (channelMatch && channelMatch[1]) {
         const channel = channelMatch[1]
           .replace(/youtube|official|channel/ig, '')
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9а-яё]+/gi, '-');
+        if (channel && channel.length > 2 && channel.length < 24) {
+          return `youtube:${channel}`;
+        }
+      }
+
+      const channelPathMatch = (data.url || '').match(/youtube\.com\/(?:@|c\/|user\/)([^/?#]+)/i);
+      if (channelPathMatch && channelPathMatch[1]) {
+        const channel = channelPathMatch[1]
           .trim()
           .toLowerCase()
           .replace(/[^a-z0-9а-яё]+/gi, '-');
@@ -743,7 +785,32 @@ OUTPUT FORMAT:
       return this.parseResponse(response, tabsData.length);
     }
 
+    regroupGenericYouTubeCategories(categorizations, tabsData) {
+      const nextCategories = new Map();
+
+      categorizations.forEach((item, index) => {
+        const data = tabsData[index];
+        if (!this.isGenericYouTubeCategory(item.category) || !this.isYouTubeTabData(data)) {
+          return;
+        }
+
+        const signal = this.youtubeTopicSignal(data);
+        nextCategories.set(index, this.labelForYouTubeSignal(signal));
+      });
+
+      if (nextCategories.size === 0) {
+        return categorizations;
+      }
+
+      return categorizations.map((item, index) => ({
+        ...item,
+        category: nextCategories.get(index) || item.category
+      }));
+    }
+
     splitLargeCategories(categorizations, tabsData) {
+      categorizations = this.regroupGenericYouTubeCategories(categorizations, tabsData);
+
       const grouped = new Map();
       categorizations.forEach((item, index) => {
         if (!grouped.has(item.category)) {
@@ -841,7 +908,7 @@ OUTPUT FORMAT:
       };
 
       if (labels[topic]) return labels[topic];
-      return this.titleFromHost(topic).replace(/\bVideos?$/i, '').trim().substring(0, 24) || 'YouTube Videos';
+      return this.titleFromHost(topic).replace(/\bVideos?$/i, '').trim().substring(0, 24) || 'Misc Videos';
     }
 
     titleFromHost(host) {
@@ -2876,7 +2943,7 @@ OUTPUT FORMAT:
         return;
       }
 
-      console.log('[NeuroSort] Initializing v1.1.12...');
+      console.log('[NeuroSort] Initializing v1.1.13...');
 
       await this.waitForDependencies();
 
@@ -3437,6 +3504,6 @@ OUTPUT FORMAT:
   setTimeout(() => neurosort.init(), 1000);
   setTimeout(() => neurosort.init(), 3000);
 
-  console.log('[NeuroSort] Script loaded v1.1.12');
+  console.log('[NeuroSort] Script loaded v1.1.13');
 
 })();

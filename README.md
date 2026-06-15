@@ -1,7 +1,7 @@
 # NeuroSort
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-1.1.16-blue.svg" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.1.17-blue.svg" alt="Version">
   <img src="https://img.shields.io/badge/zen%20browser-compatible-purple.svg" alt="Zen Browser">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
 </div>

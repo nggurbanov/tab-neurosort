@@ -1,8 +1,8 @@
-// NeuroSort generated artifact version 1.1.16
+// NeuroSort generated artifact version 1.1.17
 // ==UserScript==
 // @name           NeuroSort
 // @description    AI-assisted tab grouping for Zen Browser/Sine
-// @version        1.1.16
+// @version        1.1.17
 // @author         Tyrell
 // @include        chrome://browser/content/browser.xhtml
 // @run-at         browser
@@ -1524,6 +1524,11 @@ var NeuroSort = (() => {
     button.setAttribute("type", "button");
     button.setAttribute("aria-label", "NeuroSort");
     button.setAttribute("title", "NeuroSort");
+    const icon = document.createElement("span");
+    icon.classList.add("neurosort-broom-icon");
+    icon.setAttribute("aria-hidden", "true");
+    appendText(document, icon, "\u2726");
+    button.appendChild(icon);
     button.addEventListener("click", actions.tidyUngrouped);
     button.addEventListener("contextmenu", () => {
       const root = button.parentNode;
@@ -1630,7 +1635,7 @@ var NeuroSort = (() => {
   };
 
   // src/main.ts
-  var NEUROSORT_VERSION = "1.1.16";
+  var NEUROSORT_VERSION = "1.1.17";
   var createBootstrapMessage = () => {
     return `NeuroSort ${NEUROSORT_VERSION} toolchain bootstrap loaded`;
   };

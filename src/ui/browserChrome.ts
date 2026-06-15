@@ -115,6 +115,11 @@ const createBroomButton = (
   button.setAttribute("type", "button");
   button.setAttribute("aria-label", "NeuroSort");
   button.setAttribute("title", "NeuroSort");
+  const icon = document.createElement("span");
+  icon.classList.add("neurosort-broom-icon");
+  icon.setAttribute("aria-hidden", "true");
+  appendText(document, icon, "✦");
+  button.appendChild(icon);
   button.addEventListener("click", actions.tidyUngrouped);
   button.addEventListener("contextmenu", () => {
     const root = button.parentNode;

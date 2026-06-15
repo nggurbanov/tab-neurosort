@@ -31,13 +31,13 @@ const actionsWithLog = (): { readonly actions: BrowserChromeActions; readonly ca
 };
 
 describe("browser chrome", () => {
-  it("Given malicious settings strings When chrome mounts Then user values are text nodes and API keys are masked", () => {
+  it("Given malicious settings strings When command panel opens Then settings text is not rendered in browser chrome", () => {
     // Given
     const document = new FakeChromeDocument();
     const { actions } = actionsWithLog();
 
     // When
-    mountBrowserChrome({
+    const mount = mountBrowserChrome({
       document,
       toolbar: document.body,
       workspaceId: "work<script>",
@@ -50,13 +50,15 @@ describe("browser chrome", () => {
       },
       status: { kind: "setup", message: "Paste key <script>alert(1)</script>" },
     });
+    requireFakeElement(mount.button).dispatch("contextmenu");
 
     // Then
     expect(document.innerHtmlWrites).toEqual([]);
-    expect(document.body.text()).toContain("<img src=x onerror=alert(1)>");
-    expect(document.body.text()).toContain("Paste key <script>alert(1)</script>");
+    expect(document.body.text()).not.toContain("<img src=x onerror=alert(1)>");
+    expect(document.body.text()).not.toContain("Paste key <script>alert(1)</script>");
     expect(document.body.text()).not.toContain("sk-live-secret-123456");
-    expect(document.body.text()).toContain("sk-live...3456");
+    expect(document.body.text()).not.toContain("sk-live...3456");
+    expect(document.body.text()).toContain("Tidy ungrouped tabs");
   });
 
   it("Given repeated workspace mounts When chrome mounts Then buttons have unique IDs and visible badges update", () => {
@@ -99,7 +101,7 @@ describe("browser chrome", () => {
     expect(first.button.id).not.toBe(otherWorkspace.button.id);
     expect(firstButton?.text()).toContain("!");
     expect(sameWorkspaceButton?.text()).toContain("!");
-    expect(document.body.text()).toContain("Provider failed");
+    expect(document.body.text()).not.toContain("Provider failed");
     expect(otherWorkspaceButton?.text()).toContain("Off");
   });
 
@@ -141,20 +143,24 @@ describe("browser chrome", () => {
       settings: { providerLabel: "Ollama", modelLabel: "llama3", endpointLabel: "local", apiKey: "" },
       status: { kind: "ready", badgeText: "2", message: "Ready" },
     });
-    const menu = mount.root.querySelector(".neurosort-menu");
     const button = requireFakeElement(mount.button);
     const root = requireFakeElement(mount.root);
-    const menuElement = requireFakeElement(menu);
+    const initialText = document.body.text();
     button.dispatch("contextmenu");
+    const menuElement = requireFakeElement(mount.root.querySelector(".neurosort-menu"));
 
     // Then
+    expect(initialText).not.toContain("Tidy ungrouped tabs");
+    expect(initialText).not.toContain("Settings");
+    expect(initialText).not.toContain("Provider");
+    expect(mount.root.querySelector(".neurosort-menu")).not.toBeNull();
     expect(button.text()).not.toContain("Broom");
     expect(button.dataset["aria-label"]).toBe("NeuroSort");
-    expect(menuElement.classList.has("neurosort-menu-hidden")).toBe(true);
+    expect(menuElement.classList.has("neurosort-menu-hidden")).toBe(false);
     expect(root.classList.has("neurosort-menu-open")).toBe(true);
   });
 
-  it("Given actionable and disabled states When chrome updates Then state text stays visible", () => {
+  it("Given actionable and disabled states When chrome updates Then only badge state stays visible", () => {
     // Given
     const document = new FakeChromeDocument();
     const { actions } = actionsWithLog();
@@ -174,12 +180,12 @@ describe("browser chrome", () => {
 
     // Then
     expect(document.body.querySelector(`#${mount.button.id}`)?.text()).toContain("!");
-    expect(setupText).toContain("Choose a provider");
-    expect(document.body.text()).toContain("Missing model");
-    expect(document.body.text()).toContain("Open setup");
+    expect(setupText).not.toContain("Choose a provider");
+    expect(document.body.text()).not.toContain("Missing model");
+    expect(document.body.text()).not.toContain("Open setup");
   });
 
-  it("Given adapter failure When chrome updates Then internal status tokens are not shown", () => {
+  it("Given adapter failure When chrome updates Then no internal status text is rendered", () => {
     // Given
     const document = new FakeChromeDocument();
     const { actions } = actionsWithLog();
@@ -197,7 +203,8 @@ describe("browser chrome", () => {
 
     // Then
     expect(document.body.text()).not.toContain("adapter_failed");
-    expect(document.body.text()).toContain("Tab grouping is unavailable");
+    expect(document.body.text()).not.toContain("Tab grouping is unavailable");
+    expect(document.body.text()).toBe("!");
   });
 
   it("Given toast text includes malformed provider output When shown and dismissed Then it never writes innerHTML", () => {

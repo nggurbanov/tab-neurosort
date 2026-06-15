@@ -1,4 +1,4 @@
-import { appendLabeledText, appendText, clearChildren, type ChromeDocument, type ChromeElement } from "./dom";
+import { appendText, clearChildren, type ChromeDocument, type ChromeElement } from "./dom";
 
 export type BrowserChromeStatus =
   | { readonly kind: "ready"; readonly message: string; readonly badgeText?: string }
@@ -52,7 +52,6 @@ export type BrowserChromeCommand = "tidy-ungrouped" | "tidy-all" | "tidy-selecte
 type MountedChrome = {
   readonly workspaceId: string;
   readonly button: ChromeElement;
-  readonly statusPanel: ChromeElement;
   readonly badge: ChromeElement;
 };
 
@@ -70,16 +69,8 @@ export const mountBrowserChrome = (options: BrowserChromeMountOptions): BrowserC
   button.appendChild(badge);
   root.appendChild(button);
 
-  const menu = createContextMenu(options.document, options.actions);
-  const quickSettings = createQuickSettings(options.document, options.settings, options.actions);
-  const statusPanel = options.document.createElement("section");
-  statusPanel.classList.add("neurosort-status");
-  root.appendChild(menu);
-  root.appendChild(quickSettings);
-  root.appendChild(statusPanel);
-
   options.toolbar.appendChild(root);
-  const mounted = { workspaceId: options.workspaceId, button, statusPanel, badge };
+  const mounted = { workspaceId: options.workspaceId, button, badge };
   mountedChromes.push(mounted);
   updateMountedChrome(mounted, options.status, options.document);
 
@@ -127,15 +118,29 @@ const createBroomButton = (
   button.addEventListener("click", actions.tidyUngrouped);
   button.addEventListener("contextmenu", () => {
     const root = button.parentNode;
-    root?.classList.add("neurosort-menu-open");
+    if (root === null) {
+      return;
+    }
+    ensureCommandPanel(document, root, actions);
+    root.classList.add("neurosort-menu-open");
   });
   return button;
+};
+
+const ensureCommandPanel = (
+  document: ChromeDocument,
+  root: ChromeElement,
+  actions: BrowserChromeActions,
+): void => {
+  if (root.querySelector(".neurosort-menu") !== null) {
+    return;
+  }
+  root.appendChild(createContextMenu(document, actions));
 };
 
 const createContextMenu = (document: ChromeDocument, actions: BrowserChromeActions): ChromeElement => {
   const menu = document.createElement("menu");
   menu.classList.add("neurosort-menu");
-  menu.classList.add("neurosort-menu-hidden");
   appendMenuButton(document, menu, "tidy-ungrouped", "Tidy ungrouped tabs", actions.tidyUngrouped);
   appendMenuButton(document, menu, "tidy-all", "Tidy all tabs", actions.tidyAll);
   appendMenuButton(document, menu, "tidy-selected", "Tidy selected tabs", actions.tidySelected);
@@ -160,36 +165,10 @@ const appendMenuButton = (
   menu.appendChild(item);
 };
 
-const createQuickSettings = (
-  document: ChromeDocument,
-  settings: BrowserChromeSettings,
-  actions: BrowserChromeActions,
-): ChromeElement => {
-  const panel = document.createElement("section");
-  panel.classList.add("neurosort-quick-settings");
-  panel.classList.add("neurosort-menu-hidden");
-  appendLabeledText(document, panel, "Provider", settings.providerLabel);
-  appendLabeledText(document, panel, "Model", settings.modelLabel);
-  appendLabeledText(document, panel, "Endpoint", settings.endpointLabel);
-  appendLabeledText(document, panel, "API key", maskSecret(settings.apiKey));
-  const save = document.createElement("button");
-  save.classList.add("neurosort-save-settings");
-  save.setAttribute("type", "button");
-  appendText(document, save, "Save");
-  save.addEventListener("click", actions.saveQuickSettings);
-  panel.appendChild(save);
-  return panel;
-};
-
 const updateMountedChrome = (chrome: MountedChrome, status: BrowserChromeStatus, document: ChromeDocument): void => {
   clearChildren(chrome.badge);
-  clearChildren(chrome.statusPanel);
   const badgeText = getBadgeText(status);
   appendText(document, chrome.badge, badgeText);
-  appendText(document, chrome.statusPanel, userFacingStatusMessage(status.message));
-  if (status.kind === "error") {
-    appendText(document, chrome.statusPanel, ` ${status.actionLabel}`);
-  }
 };
 
 const showToast = (document: ChromeDocument, root: ChromeElement, message: string): BrowserChromeToast => {
@@ -241,29 +220,6 @@ const getBadgeText = (status: BrowserChromeStatus): string => {
     default:
       return assertNever(status);
   }
-};
-
-const maskSecret = (secret: string): string => {
-  if (secret.length === 0) {
-    return "Not set";
-  }
-  if (secret.length <= 10) {
-    return "Set";
-  }
-  return `${secret.slice(0, 7)}...${secret.slice(-4)}`;
-};
-
-const userFacingStatusMessage = (message: string): string => {
-  if (message === "adapter_failed") {
-    return "Tab grouping is unavailable";
-  }
-  if (message === "missing_consent") {
-    return "Enable data consent to use AI sorting";
-  }
-  if (message === "provider_disabled") {
-    return "Choose an AI provider";
-  }
-  return message;
 };
 
 const safeIdPart = (value: string): string => {

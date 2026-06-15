@@ -1,8 +1,8 @@
-// NeuroSort generated artifact version 1.1.15
+// NeuroSort generated artifact version 1.1.16
 // ==UserScript==
 // @name           NeuroSort
 // @description    AI-assisted tab grouping for Zen Browser/Sine
-// @version        1.1.15
+// @version        1.1.16
 // @author         Tyrell
 // @include        chrome://browser/content/browser.xhtml
 // @run-at         browser
@@ -1441,8 +1441,9 @@ var NeuroSort = (() => {
       case "provider_denied":
         return { status: "blocked", message: result.reason, canUndo };
       case "provider_failed":
+        return { status: "failed", message: "Provider request failed", canUndo };
       case "adapter_failed":
-        return { status: "failed", message: result.status, canUndo };
+        return { status: "failed", message: `Tab grouping is unavailable: ${result.missingApi}`, canUndo };
       case "busy":
         return { status: "running", message: "Operation in progress", canUndo };
       case "empty":
@@ -1466,13 +1467,6 @@ var NeuroSort = (() => {
   var appendText = (document, parent, text) => {
     parent.appendChild(document.createTextNode(text));
   };
-  var appendLabeledText = (document, parent, label, value) => {
-    const row = document.createElement("div");
-    row.classList.add("neurosort-row");
-    appendText(document, row, `${label}: ${value}`);
-    parent.appendChild(row);
-    return row;
-  };
   var clearChildren = (element) => {
     while (element.firstChild !== null) {
       element.removeChild(element.firstChild);
@@ -1492,15 +1486,8 @@ var NeuroSort = (() => {
     badge.classList.add("neurosort-badge");
     button.appendChild(badge);
     root.appendChild(button);
-    const menu = createContextMenu(options.document, options.actions);
-    const quickSettings = createQuickSettings(options.document, options.settings, options.actions);
-    const statusPanel = options.document.createElement("section");
-    statusPanel.classList.add("neurosort-status");
-    root.appendChild(menu);
-    root.appendChild(quickSettings);
-    root.appendChild(statusPanel);
     options.toolbar.appendChild(root);
-    const mounted = { workspaceId: options.workspaceId, button, statusPanel, badge };
+    const mounted = { workspaceId: options.workspaceId, button, badge };
     mountedChromes.push(mounted);
     updateMountedChrome(mounted, options.status, options.document);
     return {
@@ -1540,14 +1527,23 @@ var NeuroSort = (() => {
     button.addEventListener("click", actions.tidyUngrouped);
     button.addEventListener("contextmenu", () => {
       const root = button.parentNode;
-      root?.classList.add("neurosort-menu-open");
+      if (root === null) {
+        return;
+      }
+      ensureCommandPanel(document, root, actions);
+      root.classList.add("neurosort-menu-open");
     });
     return button;
+  };
+  var ensureCommandPanel = (document, root, actions) => {
+    if (root.querySelector(".neurosort-menu") !== null) {
+      return;
+    }
+    root.appendChild(createContextMenu(document, actions));
   };
   var createContextMenu = (document, actions) => {
     const menu = document.createElement("menu");
     menu.classList.add("neurosort-menu");
-    menu.classList.add("neurosort-menu-hidden");
     appendMenuButton(document, menu, "tidy-ungrouped", "Tidy ungrouped tabs", actions.tidyUngrouped);
     appendMenuButton(document, menu, "tidy-all", "Tidy all tabs", actions.tidyAll);
     appendMenuButton(document, menu, "tidy-selected", "Tidy selected tabs", actions.tidySelected);
@@ -1564,31 +1560,10 @@ var NeuroSort = (() => {
     item.addEventListener("click", action);
     menu.appendChild(item);
   };
-  var createQuickSettings = (document, settings, actions) => {
-    const panel = document.createElement("section");
-    panel.classList.add("neurosort-quick-settings");
-    panel.classList.add("neurosort-menu-hidden");
-    appendLabeledText(document, panel, "Provider", settings.providerLabel);
-    appendLabeledText(document, panel, "Model", settings.modelLabel);
-    appendLabeledText(document, panel, "Endpoint", settings.endpointLabel);
-    appendLabeledText(document, panel, "API key", maskSecret(settings.apiKey));
-    const save = document.createElement("button");
-    save.classList.add("neurosort-save-settings");
-    save.setAttribute("type", "button");
-    appendText(document, save, "Save");
-    save.addEventListener("click", actions.saveQuickSettings);
-    panel.appendChild(save);
-    return panel;
-  };
   var updateMountedChrome = (chrome, status, document) => {
     clearChildren(chrome.badge);
-    clearChildren(chrome.statusPanel);
     const badgeText = getBadgeText(status);
     appendText(document, chrome.badge, badgeText);
-    appendText(document, chrome.statusPanel, userFacingStatusMessage(status.message));
-    if (status.kind === "error") {
-      appendText(document, chrome.statusPanel, ` ${status.actionLabel}`);
-    }
   };
   var showToast = (document, root, message) => {
     const toast = document.createElement("aside");
@@ -1638,27 +1613,6 @@ var NeuroSort = (() => {
         return assertNever5(status);
     }
   };
-  var maskSecret = (secret) => {
-    if (secret.length === 0) {
-      return "Not set";
-    }
-    if (secret.length <= 10) {
-      return "Set";
-    }
-    return `${secret.slice(0, 7)}...${secret.slice(-4)}`;
-  };
-  var userFacingStatusMessage = (message) => {
-    if (message === "adapter_failed") {
-      return "Tab grouping is unavailable";
-    }
-    if (message === "missing_consent") {
-      return "Enable data consent to use AI sorting";
-    }
-    if (message === "provider_disabled") {
-      return "Choose an AI provider";
-    }
-    return message;
-  };
   var safeIdPart = (value) => {
     const safe = value.toLowerCase().split("").map((char) => isIdChar(char) ? char : "-").join("").replace(/-+/g, "-");
     return safe.length === 0 ? "workspace" : safe;
@@ -1676,7 +1630,7 @@ var NeuroSort = (() => {
   };
 
   // src/main.ts
-  var NEUROSORT_VERSION = "1.1.15";
+  var NEUROSORT_VERSION = "1.1.16";
   var createBootstrapMessage = () => {
     return `NeuroSort ${NEUROSORT_VERSION} toolchain bootstrap loaded`;
   };

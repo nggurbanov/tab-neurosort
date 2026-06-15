@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { installNeuroSort } from "../../src/main";
 import type { NeuroSortApp } from "../../src/runtime/orchestrator";
-import { FakeChromeDocument, type FakeChromeElement } from "../ui/fakeChromeDom";
+import { FakeChromeDocument, FakeChromeElement } from "../ui/fakeChromeDom";
 
 type TidyCall = {
   readonly trigger: string;
@@ -125,7 +125,10 @@ describe("NeuroSort browser bootstrap", () => {
 
     // When
     installNeuroSort(runtime, { createApp: () => app });
-    document.body.querySelector(".neurosort-broom")?.click();
+    const broom = requireFakeElement(document.body.querySelector(".neurosort-broom"));
+    broom.click();
+    expect(buttonWithText(document, "Tidy all tabs")).toBeNull();
+    broom.dispatch("contextmenu");
     buttonWithText(document, "Tidy all tabs")?.click();
     buttonWithText(document, "Tidy selected tabs")?.click();
     buttonWithText(document, "Undo last tidy")?.click();
@@ -154,3 +157,10 @@ describe("NeuroSort browser bootstrap", () => {
     expect(keyEvents.map((event) => event.defaultPrevented)).toEqual([true, true]);
   });
 });
+
+const requireFakeElement = (element: unknown): FakeChromeElement => {
+  if (element instanceof FakeChromeElement) {
+    return element;
+  }
+  throw new Error("Expected fake chrome element");
+};

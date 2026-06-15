@@ -172,8 +172,9 @@ const stateAfterTidy = (result: TidyResult, canUndo: boolean): NeuroSortUiState 
     case "provider_denied":
       return { status: "blocked", message: result.reason, canUndo };
     case "provider_failed":
+      return { status: "failed", message: "Provider request failed", canUndo };
     case "adapter_failed":
-      return { status: "failed", message: result.status, canUndo };
+      return { status: "failed", message: `Tab grouping is unavailable: ${result.missingApi}`, canUndo };
     case "busy":
       return { status: "running", message: "Operation in progress", canUndo };
     case "empty":

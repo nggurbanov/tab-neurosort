@@ -5,7 +5,7 @@ import { createNeuroSortApp, type NeuroSortApp, type NeuroSortProviderCompletion
 import { mountBrowserChrome, type BrowserChromeStatus } from "../../src/ui/browserChrome";
 import { FakeTabGroup } from "../fakes/fakeDom";
 import { createFakeRuntime, type FakeRuntime } from "../fakes/fakeRuntime";
-import { FakeChromeDocument } from "../ui/fakeChromeDom";
+import { FakeChromeDocument, FakeChromeElement } from "../ui/fakeChromeDom";
 
 const readyOpenAiPrefs = (runtime: FakeRuntime): void => {
   runtime.Services.prefs.setStringPref("extensions.neurosort.provider", "openai");
@@ -53,8 +53,10 @@ describe("fake Zen/Sine end-to-end QA matrix", () => {
 
     // Then
     expect(chrome.button.id).toContain("neurosort-broom-qa-workspace");
+    expect(chrome.root.querySelectorAll("button").length).toBe(1);
+    expect(chrome.root.querySelector(".neurosort-status")).toBeNull();
+    requireFakeElement(chrome.button).dispatch("contextmenu");
     expect(chrome.root.querySelectorAll("button").length).toBeGreaterThanOrEqual(6);
-    expect(chrome.root.querySelector(".neurosort-status")).not.toBeNull();
     chrome.update({ kind: "ready", message: "Ready", badgeText: "On" });
     expect(chrome.root.querySelector(".neurosort-badge")).not.toBeNull();
   });
@@ -275,6 +277,13 @@ const groupSummary = (runtime: FakeRuntime): readonly (readonly [string, readonl
 
 const missingTab = (): never => {
   throw new MissingFakeTabError();
+};
+
+const requireFakeElement = (element: unknown): FakeChromeElement => {
+  if (element instanceof FakeChromeElement) {
+    return element;
+  }
+  throw new Error("Expected fake chrome element");
 };
 
 class MissingFakeTabError extends Error {

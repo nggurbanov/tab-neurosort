@@ -2,11 +2,11 @@
  * NeuroSort - AI-powered Tab Organization for Zen Browser
  * userChrome.css - Custom styling for the broom button and UI elements
  * 
- * Note: Primary styles are injected via JavaScript in neurosort.uc.js
- * This file provides additional customization hooks and fallback styles.
+ * Note: This is the hand-authored stable chrome stylesheet for NeuroSort.
+ * JavaScript should inject only minimal runtime state styles that cannot live
+ * in static CSS.
  */
 
-/* ============================================================================
 /* ============================================================================
    BROOM BUTTON - Primary Styles
    ============================================================================ */

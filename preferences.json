@@ -1,7 +1,7 @@
 [
   {
     "type": "text",
-    "label": "**NeuroSort** - AI-powered tab organization",
+    "label": "**NeuroSort** - privacy-first AI tab organization",
     "size": "14px",
     "margin": "0 0 10px 0"
   },
@@ -13,55 +13,288 @@
     "property": "extensions.neurosort.enabled",
     "type": "checkbox",
     "label": "Enable NeuroSort",
-    "default": true
+    "defaultValue": true
+  },
+  {
+    "property": "extensions.neurosort.provider",
+    "type": "dropdown",
+    "label": "AI provider",
+    "defaultValue": "disabled",
+    "placeholder": false,
+    "options": [
+      {
+        "value": "disabled",
+        "label": "Disabled"
+      },
+      {
+        "value": "openai",
+        "label": "OpenAI-compatible"
+      },
+      {
+        "value": "gemini",
+        "label": "Gemini"
+      },
+      {
+        "value": "ollama",
+        "label": "Ollama"
+      },
+      {
+        "value": "custom",
+        "label": "Custom OpenAI-compatible"
+      }
+    ]
+  },
+  {
+    "property": "extensions.neurosort.data_consent",
+    "type": "checkbox",
+    "label": "Allow sending tab titles and URLs to the selected provider",
+    "defaultValue": false
   },
   {
     "property": "extensions.neurosort.auto_tidy",
     "type": "checkbox",
-    "label": "Auto-tidy tabs"
+    "label": "Auto-tidy tabs",
+    "defaultValue": false
   },
   {
     "property": "extensions.neurosort.auto_tidy_threshold",
     "type": "number",
     "label": "Auto-tidy threshold",
-    "default": 6
+    "defaultValue": 6,
+    "min": 2,
+    "max": 50
+  },
+  {
+    "property": "extensions.neurosort.min_group_size",
+    "type": "number",
+    "label": "Minimum group size",
+    "defaultValue": 2,
+    "min": 2,
+    "max": 20
+  },
+  {
+    "property": "extensions.neurosort.preserve_pinned",
+    "type": "checkbox",
+    "label": "Preserve pinned tabs",
+    "defaultValue": true
+  },
+  {
+    "property": "extensions.neurosort.existing_group_behavior",
+    "type": "dropdown",
+    "label": "Existing group behavior",
+    "defaultValue": "prefer",
+    "placeholder": false,
+    "options": [
+      {
+        "value": "ignore",
+        "label": "Ignore existing groups"
+      },
+      {
+        "value": "prefer",
+        "label": "Prefer matching existing groups"
+      },
+      {
+        "value": "force_new",
+        "label": "Always create new groups"
+      }
+    ]
+  },
+  {
+    "property": "extensions.neurosort.fetch_descriptions",
+    "type": "checkbox",
+    "label": "Fetch page descriptions",
+    "defaultValue": false
+  },
+  {
+    "property": "extensions.neurosort.keyboard_shortcut",
+    "type": "string",
+    "label": "Keyboard shortcut",
+    "defaultValue": "alt+shift+t",
+    "placeholder": "alt+shift+t"
   },
   {
     "property": "extensions.neurosort.debug",
     "type": "checkbox",
-    "label": "Debug mode"
+    "label": "Debug logging",
+    "defaultValue": false
   },
   {
     "type": "separator",
-    "label": "AI Provider"
+    "label": "Provider fields"
   },
   {
-    "property": "extensions.neurosort.provider",
-    "type": "dropdown",
-    "label": "Provider",
-    "default": "custom",
-    "options": [
-      { "value": "openai", "label": "OpenAI" },
-      { "value": "gemini", "label": "Gemini" },
-      { "value": "ollama", "label": "Ollama" },
-      { "value": "custom", "label": "Custom" }
+    "property": "extensions.neurosort.openai.endpoint",
+    "type": "string",
+    "label": "OpenAI-compatible endpoint",
+    "defaultValue": "",
+    "placeholder": "endpoint URL",
+    "conditions": [
+      {
+        "if": {
+          "property": "extensions.neurosort.provider",
+          "value": "openai"
+        }
+      }
+    ]
+  },
+  {
+    "property": "extensions.neurosort.openai.api_key",
+    "type": "string",
+    "label": "OpenAI-compatible API key",
+    "defaultValue": "",
+    "placeholder": "sk-...",
+    "conditions": [
+      {
+        "if": {
+          "property": "extensions.neurosort.provider",
+          "value": "openai"
+        }
+      }
+    ]
+  },
+  {
+    "property": "extensions.neurosort.openai.model",
+    "type": "string",
+    "label": "OpenAI-compatible model",
+    "defaultValue": "",
+    "placeholder": "model name",
+    "conditions": [
+      {
+        "if": {
+          "property": "extensions.neurosort.provider",
+          "value": "openai"
+        }
+      }
+    ]
+  },
+  {
+    "property": "extensions.neurosort.gemini.api_key",
+    "type": "string",
+    "label": "Gemini API key",
+    "defaultValue": "",
+    "placeholder": "AIza...",
+    "conditions": [
+      {
+        "if": {
+          "property": "extensions.neurosort.provider",
+          "value": "gemini"
+        }
+      }
+    ]
+  },
+  {
+    "property": "extensions.neurosort.gemini.model",
+    "type": "string",
+    "label": "Gemini model",
+    "defaultValue": "",
+    "placeholder": "gemini model name",
+    "conditions": [
+      {
+        "if": {
+          "property": "extensions.neurosort.provider",
+          "value": "gemini"
+        }
+      }
+    ]
+  },
+  {
+    "property": "extensions.neurosort.ollama.endpoint",
+    "type": "string",
+    "label": "Ollama endpoint",
+    "defaultValue": "",
+    "placeholder": "local endpoint URL",
+    "conditions": [
+      {
+        "if": {
+          "property": "extensions.neurosort.provider",
+          "value": "ollama"
+        }
+      }
+    ]
+  },
+  {
+    "property": "extensions.neurosort.ollama.model",
+    "type": "string",
+    "label": "Ollama model",
+    "defaultValue": "",
+    "placeholder": "local model name",
+    "conditions": [
+      {
+        "if": {
+          "property": "extensions.neurosort.provider",
+          "value": "ollama"
+        }
+      }
     ]
   },
   {
     "property": "extensions.neurosort.custom.endpoint",
     "type": "string",
-    "label": "Endpoint URL",
-    "default": "https://ai.redivo.ru/v1"
+    "label": "Custom endpoint",
+    "defaultValue": "",
+    "placeholder": "https://example.test/v1",
+    "conditions": [
+      {
+        "if": {
+          "property": "extensions.neurosort.provider",
+          "value": "custom"
+        }
+      }
+    ]
   },
   {
     "property": "extensions.neurosort.custom.api_key",
     "type": "string",
-    "label": "API Key"
+    "label": "Custom API key",
+    "defaultValue": "",
+    "placeholder": "provider API key",
+    "conditions": [
+      {
+        "if": {
+          "property": "extensions.neurosort.provider",
+          "value": "custom"
+        }
+      }
+    ]
   },
   {
     "property": "extensions.neurosort.custom.model",
     "type": "string",
-    "label": "Model",
-    "default": "cx/gpt-5.1-codex-mini"
+    "label": "Custom model",
+    "defaultValue": "",
+    "placeholder": "model name",
+    "conditions": [
+      {
+        "if": {
+          "property": "extensions.neurosort.provider",
+          "value": "custom"
+        }
+      }
+    ]
+  },
+  {
+    "property": "extensions.neurosort.custom.format",
+    "type": "dropdown",
+    "label": "Custom response format",
+    "defaultValue": "openai_chat",
+    "placeholder": false,
+    "options": [
+      {
+        "value": "openai_chat",
+        "label": "OpenAI chat completions"
+      },
+      {
+        "value": "ollama_generate",
+        "label": "Ollama generate"
+      }
+    ],
+    "conditions": [
+      {
+        "if": {
+          "property": "extensions.neurosort.provider",
+          "value": "custom"
+        }
+      }
+    ]
   }
 ]

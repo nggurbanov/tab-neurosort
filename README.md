@@ -1,7 +1,7 @@
 # NeuroSort
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-1.1.11-blue.svg" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.1.14-blue.svg" alt="Version">
   <img src="https://img.shields.io/badge/zen%20browser-compatible-purple.svg" alt="Zen Browser">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
 </div>
@@ -35,7 +35,7 @@ NeuroSort automatically organizes your tabs into smart groups using OpenAI-compa
 
 - **Zen Browser** - [Download here](https://zen-browser.app/)
 - **Sine** - Theme/mod manager for Firefox-based browsers - [Installation Guide](https://github.com/CosmoCreeper/Sine/wiki/Installation)
-- **Advanced Tab Groups** - Install via Sine marketplace
+- **Tab group support** - NeuroSort uses Zen/Sine tab group capabilities when available. Advanced Tab Groups is optional historical compatibility, not a hard install requirement.
 
 ### Step 1: Enable "Allow unsafe JS"
 
@@ -50,15 +50,18 @@ NeuroSort automatically organizes your tabs into smart groups using OpenAI-compa
 
 1. Open Zen Browser Settings
 2. Go to **Sine → Mods**
-3. Click "Add repository" or paste the GitHub URL in the marketplace
-4. Enter: `tyrell/tab-neurosort` (or your fork URL)
+3. Click "Add repository" or paste the GitHub repository path
+4. Enter: `nggurbanov/tab-neurosort`
 5. Install and enable the mod
 
-### Step 3: Configure API Settings
+NeuroSort is installed from the canonical GitHub repository above. It is not currently documented as a Sine store listing.
+
+### Step 3: Configure Privacy And API Settings
 
 1. Open Zen Browser Settings
 2. Go to **Sine → NeuroSort preferences**
-3. Configure your AI provider (see Configuration section below)
+3. Leave Provider set to `disabled` until you are ready to send tab data to an AI provider
+4. Select a provider, fill the required fields, and grant data-sending consent before using AI sorting
 
 ---
 
@@ -68,19 +71,19 @@ NeuroSort automatically organizes your tabs into smart groups using OpenAI-compa
 - 🧹 **Arc-style Broom Button** - Click to tidy all ungrouped tabs
 - 🤖 **Multi-Provider AI Support** - OpenAI, Google Gemini, Ollama (local), or any custom endpoint
 - 🔄 **Auto-Tidy** - Automatically organize when tabs exceed a threshold
-- 🎨 **Advanced Tab Groups Integration** - Works with [Advanced Tab Groups](https://github.com/Vertex-Mods/Advanced-Tab-Groups)
-- 📝 **Smart Context** - Fetches page descriptions for better categorization
+- 🎨 **Zen/Sine Tab Group Integration** - Uses available tab group APIs and fails closed if grouping support is unavailable
+- 📝 **Optional Smart Context** - Page description fetching is off by default and only runs when enabled
 - 🎯 **Existing Group Awareness** - AI prefers existing group names
 
 ### User Experience
 - 🎬 **Welcome/Setup Screen** - First-time users see a guided setup wizard
 - 📋 **Context Menu** - Right-click the broom button for more options
-- ↩️ **Undo** - Ctrl/Cmd+Z to undo the last sort operation
-- 🔢 **Multi-Select Sorting** - Ctrl+Shift+Click to sort only selected tabs
+- ↩️ **Undo** - Alt+Shift+Z or the context menu undo the last tidy operation for this browser session
+- 🔢 **Selected Tab Sorting** - Explicitly choose selected tabs from the context menu or configured UI action
 - 🧹 **Tidy All** - Alt+Shift+Click to sort all tabs (including grouped)
 - ⚙️ **Quick Settings** - Quick settings popup accessible from context menu
 - 🔔 **Status Badge** - Shows ungrouped tabs count on the broom button
-- ⌨️ **Keyboard Shortcut** - Configurable global shortcut (default Ctrl+Shift+T)
+- ⌨️ **Keyboard Shortcuts** - Configurable global shortcuts (defaults: Alt+Shift+T for tidy, Alt+Shift+Z for undo)
 - 📊 **Group Stats** - View group statistics in the context menu
 
 ### Reliability
@@ -91,6 +94,8 @@ NeuroSort automatically organizes your tabs into smart groups using OpenAI-compa
 ---
 
 ## ⚙️ Configuration
+
+NeuroSort is privacy-first by default. The provider starts as `disabled`, data-sending consent starts off, and page description fetching starts off. No network request is made until you choose a provider, fill the required provider fields, and grant consent in NeuroSort preferences. There is no hidden default remote endpoint.
 
 ### OpenAI Setup
 
@@ -142,7 +147,7 @@ Works with:
 1. Open tabs as usual
 2. Hover over the workspace button area (top of sidebar)
 3. Click the 🧹 broom icon
-4. Tabs are automatically organized into logical groups
+4. Ungrouped tabs in the current workspace are organized into logical groups
 
 ### Context Menu
 
@@ -150,7 +155,7 @@ Right-click the broom button to access:
 - **Sort Ungrouped Tabs** - Organize only ungrouped tabs
 - **Sort All Tabs** - Reorganize all tabs (including grouped)
 - **Sort Selected Tabs** - Organize only selected tabs
-- **Undo Last Sort** - Revert the previous sort operation
+- **Undo Last Sort** - Best-effort restore of the previous tidy operation in this browser session
 - **Quick Settings** - Adjust common settings without opening preferences
 - **Group Stats** - View current tab group statistics
 
@@ -158,13 +163,14 @@ Right-click the broom button to access:
 
 To sort specific tabs:
 1. Select tabs using Ctrl/Cmd + click
-2. Ctrl+Shift+Click the broom button
+2. Choose **Sort Selected Tabs** from the context menu or configured UI action
 3. Only selected tabs will be organized
 
 ### Tidy All Tabs
 
 To reorganize all tabs (including already grouped):
 - Alt+Shift+Click the broom button
+- Or choose **Sort All Tabs** from the context menu
 
 ### Auto-Tidy
 
@@ -174,8 +180,9 @@ To reorganize all tabs (including already grouped):
 
 ### Undo
 
-- Press **Ctrl/Cmd+Z** to undo the last sort operation
+- Press **Alt+Shift+Z** to undo the last tidy operation
 - Or use **Undo Last Sort** from the context menu
+- Undo is session-local and best effort: it restores original group membership and order first, but can degrade if tabs or groups were closed or changed after the tidy
 
 ### Status Badge
 
@@ -191,12 +198,13 @@ The broom button displays a badge showing the count of ungrouped tabs, giving yo
 | Auto-tidy | Automatically organize tabs | `false` |
 | Auto-tidy threshold | Number of tabs to trigger | `6` |
 | Auto-tidy cooldown | Seconds between auto-tidies | `30` |
-| Provider | AI provider selection | `custom` |
+| Provider | AI provider selection | `disabled` |
+| Data-sending consent | Allows sending tab metadata to the selected provider | `false` |
 | Minimum group size | Tabs needed to form group | `2` |
 | Preserve pinned tabs | Never group pinned tabs | `true` |
 | Use existing groups | Prefer existing group names | `true` |
-| Fetch descriptions | Get meta descriptions for context | `true` |
-| Keyboard shortcut | Global shortcut for sorting | `Ctrl+Shift+T` |
+| Fetch descriptions | Get meta descriptions for context | `false` |
+| Keyboard shortcut | Global shortcut for sorting | `alt+shift+t` |
 | Show status badge | Display ungrouped tab count | `true` |
 | Enable fallback | Use domain-based fallback on API failure | `true` |
 | Rate limit cooldown | Seconds between API calls | `5` |
@@ -208,12 +216,28 @@ The broom button displays a badge showing the count of ungrouped tabs, giving yo
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+Shift+T` (Windows/Linux) | Sort ungrouped tabs (configurable) |
-| `Cmd+Shift+T` (macOS) | Sort ungrouped tabs (configurable) |
-| `Ctrl/Cmd+Z` | Undo last sort operation |
-| `Ctrl+Shift+Click` | Sort selected tabs only |
+| `Alt+Shift+T` | Sort ungrouped tabs (configurable) |
+| `Alt+Shift+Z` | Undo last tidy operation |
 | `Alt+Shift+Click` | Sort all tabs (including grouped) |
 | Right-click broom | Open context menu |
+
+---
+
+## 🔐 Privacy And Logging
+
+- Provider is `disabled` by default, and tab metadata is not sent until provider settings are complete and data-sending consent is enabled.
+- Description fetching is off by default. When enabled, page descriptions may be included in prompt context.
+- Debug logging is off by default. When enabled, NeuroSort redacts sensitive details and must not log API keys, Authorization headers, request bodies, raw prompts, full URLs, or response bodies.
+- Remote providers receive tab titles, domains, and eligible tab metadata needed for grouping. Use Ollama or another local endpoint if you do not want tab metadata sent to a hosted provider.
+
+---
+
+## 🧩 Compatibility
+
+- Targeted Zen/Sine QA facts for this redesign: Zen stable `1.21.1b`, Zen Twilight `1.22t` via `twilight-1`, Sine stable `v2.3.3`, and Cosine prerelease `v2.3.3c`.
+- NeuroSort uses Zen/Sine tab group capabilities when available and fails closed with a setup message if required group APIs are missing.
+- Advanced Tab Groups compatibility is optional and historical. It is not a hard install requirement.
+- Zen folders, split views, pinned tabs, and tab groups are treated as distinct browser concepts.
 
 ---
 
@@ -226,7 +250,7 @@ The broom button displays a badge showing the count of ungrouped tabs, giving yo
 1. Go to **Settings → Sine → Allow unsafe JS from external sources**
 2. Make sure it's **ENABLED**
 3. Restart Zen Browser
-4. If still not working, ensure Sine is properly installed and Advanced Tab Groups is installed
+4. If still not working, ensure Sine is properly installed and the current Zen/Sine build exposes tab group APIs
 5. Verify `neurosort.enabled` is `true` in preferences
 
 ### No Console Logs / Script Not Loading
@@ -276,13 +300,14 @@ If you see "Using fallback categorization" in the console or groups don't look A
 
 ### Groups Not Created
 
-1. Ensure Advanced Tab Groups is installed and enabled
+1. Ensure the current Zen/Sine build exposes tab group APIs
 2. Check `browser.tabs.groups.enabled` is `true` in `about:config`
-3. Verify tabs aren't already in groups
+3. Advanced Tab Groups can help with older setups, but it is optional compatibility rather than a required dependency
+4. Verify tabs aren't already in groups
 
 ### Debug Mode
 
-Enable debug logging in NeuroSort preferences to see detailed logs in the browser console (F12 → Console).
+Enable debug logging in NeuroSort preferences to see redacted diagnostic logs in the browser console (F12 → Console). Debug logs must not include API keys, Authorization headers, request bodies, raw prompts, full URLs, or response bodies.
 
 ---
 
@@ -318,7 +343,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## 🙏 Acknowledgments
 
 - [Arc Browser](https://arc.net/) - Inspiration for Tidy Tabs
-- [Advanced Tab Groups](https://github.com/Vertex-Mods/Advanced-Tab-Groups) - Foundation for tab group management
+- [Advanced Tab Groups](https://github.com/Vertex-Mods/Advanced-Tab-Groups) - Historical compatibility reference
 - [Sine](https://github.com/CosmoCreeper/Sine) - Mod distribution system
 - [AI-TabGroups-ZenBrowser](https://github.com/Darsh-A/AI-TabGroups-ZenBrowser) - Reference implementation
 

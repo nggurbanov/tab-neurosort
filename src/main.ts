@@ -6,7 +6,7 @@ import { createNeuroSortApp, type NeuroSortApp } from "./runtime/orchestrator";
 import { mountBrowserChrome, type BrowserChromeMount, type BrowserChromeSettings, type BrowserChromeStatus } from "./ui/browserChrome";
 import type { ChromeDocument, ChromeElement } from "./ui/dom";
 
-export const NEUROSORT_VERSION = "1.1.14";
+export const NEUROSORT_VERSION = "1.1.15";
 
 type AppFactory = (runtime: unknown) => NeuroSortApp;
 

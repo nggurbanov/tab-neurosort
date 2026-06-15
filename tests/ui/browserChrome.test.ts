@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { mountBrowserChrome, type BrowserChromeActions } from "../../src/ui/browserChrome";
-import { FakeChromeDocument } from "./fakeChromeDom";
+import { FakeChromeDocument, FakeChromeElement } from "./fakeChromeDom";
 
 const actionsWithLog = (): { readonly actions: BrowserChromeActions; readonly calls: readonly string[] } => {
   const calls: string[] = [];
@@ -127,6 +127,33 @@ describe("browser chrome", () => {
     expect(calls).toEqual(["tidySelected", "tidyAll", "undoLastTidy", "openSettings", "saveQuickSettings"]);
   });
 
+  it("Given chrome mounts When idle Then broom is icon-only and command panel is hidden until context menu", () => {
+    // Given
+    const document = new FakeChromeDocument();
+    const { actions } = actionsWithLog();
+
+    // When
+    const mount = mountBrowserChrome({
+      document,
+      toolbar: document.body,
+      workspaceId: "alpha",
+      actions,
+      settings: { providerLabel: "Ollama", modelLabel: "llama3", endpointLabel: "local", apiKey: "" },
+      status: { kind: "ready", badgeText: "2", message: "Ready" },
+    });
+    const menu = mount.root.querySelector(".neurosort-menu");
+    const button = requireFakeElement(mount.button);
+    const root = requireFakeElement(mount.root);
+    const menuElement = requireFakeElement(menu);
+    button.dispatch("contextmenu");
+
+    // Then
+    expect(button.text()).not.toContain("Broom");
+    expect(button.dataset["aria-label"]).toBe("NeuroSort");
+    expect(menuElement.classList.has("neurosort-menu-hidden")).toBe(true);
+    expect(root.classList.has("neurosort-menu-open")).toBe(true);
+  });
+
   it("Given actionable and disabled states When chrome updates Then state text stays visible", () => {
     // Given
     const document = new FakeChromeDocument();
@@ -152,6 +179,27 @@ describe("browser chrome", () => {
     expect(document.body.text()).toContain("Open setup");
   });
 
+  it("Given adapter failure When chrome updates Then internal status tokens are not shown", () => {
+    // Given
+    const document = new FakeChromeDocument();
+    const { actions } = actionsWithLog();
+    const mount = mountBrowserChrome({
+      document,
+      toolbar: document.body,
+      workspaceId: "alpha",
+      actions,
+      settings: { providerLabel: "Ollama", modelLabel: "llama3", endpointLabel: "local", apiKey: "" },
+      status: { kind: "ready", badgeText: "2", message: "Ready" },
+    });
+
+    // When
+    mount.update({ kind: "error", message: "adapter_failed", actionLabel: "Open settings" });
+
+    // Then
+    expect(document.body.text()).not.toContain("adapter_failed");
+    expect(document.body.text()).toContain("Tab grouping is unavailable");
+  });
+
   it("Given toast text includes malformed provider output When shown and dismissed Then it never writes innerHTML", () => {
     // Given
     const document = new FakeChromeDocument();
@@ -174,3 +222,10 @@ describe("browser chrome", () => {
     expect(document.body.text()).not.toContain("Malformed:");
   });
 });
+
+const requireFakeElement = (element: unknown): FakeChromeElement => {
+  if (element instanceof FakeChromeElement) {
+    return element;
+  }
+  throw new Error("Expected fake chrome element");
+};

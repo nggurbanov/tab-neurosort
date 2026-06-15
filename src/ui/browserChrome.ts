@@ -122,14 +122,20 @@ const createBroomButton = (
   nextChromeId += 1;
   button.classList.add("neurosort-broom");
   button.setAttribute("type", "button");
-  appendText(document, button, "Broom");
+  button.setAttribute("aria-label", "NeuroSort");
+  button.setAttribute("title", "NeuroSort");
   button.addEventListener("click", actions.tidyUngrouped);
+  button.addEventListener("contextmenu", () => {
+    const root = button.parentNode;
+    root?.classList.add("neurosort-menu-open");
+  });
   return button;
 };
 
 const createContextMenu = (document: ChromeDocument, actions: BrowserChromeActions): ChromeElement => {
   const menu = document.createElement("menu");
   menu.classList.add("neurosort-menu");
+  menu.classList.add("neurosort-menu-hidden");
   appendMenuButton(document, menu, "tidy-ungrouped", "Tidy ungrouped tabs", actions.tidyUngrouped);
   appendMenuButton(document, menu, "tidy-all", "Tidy all tabs", actions.tidyAll);
   appendMenuButton(document, menu, "tidy-selected", "Tidy selected tabs", actions.tidySelected);
@@ -161,6 +167,7 @@ const createQuickSettings = (
 ): ChromeElement => {
   const panel = document.createElement("section");
   panel.classList.add("neurosort-quick-settings");
+  panel.classList.add("neurosort-menu-hidden");
   appendLabeledText(document, panel, "Provider", settings.providerLabel);
   appendLabeledText(document, panel, "Model", settings.modelLabel);
   appendLabeledText(document, panel, "Endpoint", settings.endpointLabel);
@@ -179,7 +186,7 @@ const updateMountedChrome = (chrome: MountedChrome, status: BrowserChromeStatus,
   clearChildren(chrome.statusPanel);
   const badgeText = getBadgeText(status);
   appendText(document, chrome.badge, badgeText);
-  appendText(document, chrome.statusPanel, status.message);
+  appendText(document, chrome.statusPanel, userFacingStatusMessage(status.message));
   if (status.kind === "error") {
     appendText(document, chrome.statusPanel, ` ${status.actionLabel}`);
   }
@@ -244,6 +251,19 @@ const maskSecret = (secret: string): string => {
     return "Set";
   }
   return `${secret.slice(0, 7)}...${secret.slice(-4)}`;
+};
+
+const userFacingStatusMessage = (message: string): string => {
+  if (message === "adapter_failed") {
+    return "Tab grouping is unavailable";
+  }
+  if (message === "missing_consent") {
+    return "Enable data consent to use AI sorting";
+  }
+  if (message === "provider_disabled") {
+    return "Choose an AI provider";
+  }
+  return message;
 };
 
 const safeIdPart = (value: string): string => {

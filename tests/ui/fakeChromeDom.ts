@@ -88,6 +88,12 @@ export class FakeChromeElement implements ChromeElement {
     });
   }
 
+  dispatch(name: ChromeEventName): void {
+    this.listeners[name]?.forEach((listener) => {
+      listener();
+    });
+  }
+
   text(): string {
     return [this.textContent, ...this.children.map((child) => child.text())].join("");
   }

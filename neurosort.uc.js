@@ -1,8 +1,8 @@
-// NeuroSort generated artifact version 1.1.14
+// NeuroSort generated artifact version 1.1.15
 // ==UserScript==
 // @name           NeuroSort
 // @description    AI-assisted tab grouping for Zen Browser/Sine
-// @version        1.1.14
+// @version        1.1.15
 // @author         Tyrell
 // @include        chrome://browser/content/browser.xhtml
 // @run-at         browser
@@ -1535,13 +1535,19 @@ var NeuroSort = (() => {
     nextChromeId += 1;
     button.classList.add("neurosort-broom");
     button.setAttribute("type", "button");
-    appendText(document, button, "Broom");
+    button.setAttribute("aria-label", "NeuroSort");
+    button.setAttribute("title", "NeuroSort");
     button.addEventListener("click", actions.tidyUngrouped);
+    button.addEventListener("contextmenu", () => {
+      const root = button.parentNode;
+      root?.classList.add("neurosort-menu-open");
+    });
     return button;
   };
   var createContextMenu = (document, actions) => {
     const menu = document.createElement("menu");
     menu.classList.add("neurosort-menu");
+    menu.classList.add("neurosort-menu-hidden");
     appendMenuButton(document, menu, "tidy-ungrouped", "Tidy ungrouped tabs", actions.tidyUngrouped);
     appendMenuButton(document, menu, "tidy-all", "Tidy all tabs", actions.tidyAll);
     appendMenuButton(document, menu, "tidy-selected", "Tidy selected tabs", actions.tidySelected);
@@ -1561,6 +1567,7 @@ var NeuroSort = (() => {
   var createQuickSettings = (document, settings, actions) => {
     const panel = document.createElement("section");
     panel.classList.add("neurosort-quick-settings");
+    panel.classList.add("neurosort-menu-hidden");
     appendLabeledText(document, panel, "Provider", settings.providerLabel);
     appendLabeledText(document, panel, "Model", settings.modelLabel);
     appendLabeledText(document, panel, "Endpoint", settings.endpointLabel);
@@ -1578,7 +1585,7 @@ var NeuroSort = (() => {
     clearChildren(chrome.statusPanel);
     const badgeText = getBadgeText(status);
     appendText(document, chrome.badge, badgeText);
-    appendText(document, chrome.statusPanel, status.message);
+    appendText(document, chrome.statusPanel, userFacingStatusMessage(status.message));
     if (status.kind === "error") {
       appendText(document, chrome.statusPanel, ` ${status.actionLabel}`);
     }
@@ -1640,6 +1647,18 @@ var NeuroSort = (() => {
     }
     return `${secret.slice(0, 7)}...${secret.slice(-4)}`;
   };
+  var userFacingStatusMessage = (message) => {
+    if (message === "adapter_failed") {
+      return "Tab grouping is unavailable";
+    }
+    if (message === "missing_consent") {
+      return "Enable data consent to use AI sorting";
+    }
+    if (message === "provider_disabled") {
+      return "Choose an AI provider";
+    }
+    return message;
+  };
   var safeIdPart = (value) => {
     const safe = value.toLowerCase().split("").map((char) => isIdChar(char) ? char : "-").join("").replace(/-+/g, "-");
     return safe.length === 0 ? "workspace" : safe;
@@ -1657,7 +1676,7 @@ var NeuroSort = (() => {
   };
 
   // src/main.ts
-  var NEUROSORT_VERSION = "1.1.14";
+  var NEUROSORT_VERSION = "1.1.15";
   var createBootstrapMessage = () => {
     return `NeuroSort ${NEUROSORT_VERSION} toolchain bootstrap loaded`;
   };

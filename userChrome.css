@@ -20,66 +20,111 @@
   overflow: visible !important;
 }
 
-/* Broom button styles (matches Zen native clear button) */
-#neurosort-broom {
+.neurosort-chrome {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-inline-start: 4px !important;
+}
+
+.neurosort-broom {
   appearance: none !important;
-  opacity: 0 !important;
-  visibility: collapse !important;
-  transition: opacity 0.15s, visibility 0.15s !important;
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  opacity: 0.58 !important;
+  visibility: visible !important;
+  transition: opacity 0.15s ease, background-color 0.15s ease, transform 0.15s ease !important;
   border: none !important;
+  border-radius: 6px !important;
   background: transparent !important;
-  font-size: 10px !important;
-  font-weight: 500 !important;
-  gap: 2px !important;
   flex-shrink: 0 !important;
-  min-width: 0 !important;
   overflow: hidden !important;
-  pointer-events: none !important;
-  position: absolute !important;
+  pointer-events: auto !important;
+  position: relative !important;
   margin: 0 !important;
   padding: 0 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  -moz-context-properties: fill, fill-opacity !important;
-  fill: currentColor !important;
   color: inherit !important;
   cursor: pointer !important;
 }
 
-#neurosort-broom .broom-icon {
-  width: 14px !important;
-  height: 14px !important;
-  transition: transform 0.15s ease-in-out !important;
-  transform: translateY(0px) !important;
-  fill: currentColor !important;
+.neurosort-broom::before {
+  content: "✦" !important;
+  display: block !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+  transform: translateY(-0.5px) !important;
 }
 
 /* Hover effects */
-.pinned-tabs-container-separator:hover #neurosort-broom {
-  visibility: visible !important;
-  opacity: 0.5 !important;
-  pointer-events: auto !important;
-}
-
-.pinned-tabs-container-separator:hover #neurosort-broom:hover {
+.neurosort-broom:hover,
+.neurosort-menu-open .neurosort-broom {
   opacity: 1 !important;
+  background: color-mix(in srgb, currentColor 12%, transparent) !important;
 }
 
-#neurosort-broom:active:hover .broom-icon {
-  transform: translateY(2px) !important;
+.neurosort-broom:active {
+  transform: translateY(1px) !important;
 }
 
 /* Sorting state animation */
-#neurosort-broom.sorting {
+.neurosort-broom.sorting {
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: auto !important;
 }
 
-#neurosort-broom.sorting .broom-icon {
+.neurosort-broom.sorting::before {
   animation: neurosort-sweep 0.8s ease-in-out infinite !important;
   transform-origin: 50% 50% !important;
+}
+
+.neurosort-menu-hidden {
+  display: none !important;
+}
+
+.neurosort-menu-open .neurosort-menu {
+  position: absolute !important;
+  inset-inline-start: 0 !important;
+  bottom: calc(100% + 8px) !important;
+  z-index: 999999 !important;
+  display: grid !important;
+  gap: 2px !important;
+  min-width: 184px !important;
+  margin: 0 !important;
+  padding: 6px !important;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent) !important;
+  border-radius: 8px !important;
+  background: color-mix(in srgb, Canvas 86%, transparent) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28) !important;
+  backdrop-filter: blur(18px) !important;
+}
+
+.neurosort-menu-item,
+.neurosort-save-settings {
+  appearance: none !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: inherit !important;
+  min-height: 28px !important;
+  padding: 0 10px !important;
+  text-align: start !important;
+  font: menu !important;
+}
+
+.neurosort-menu-item:hover,
+.neurosort-save-settings:hover {
+  background: color-mix(in srgb, currentColor 12%, transparent) !important;
+}
+
+.neurosort-status {
+  display: none !important;
 }
 
 @keyframes neurosort-sweep {

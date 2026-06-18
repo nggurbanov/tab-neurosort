@@ -122,9 +122,9 @@ const collectArtifactErrors = (source) => {
   const checks = [
     [/\/\/ ==UserScript==/, "userscript header is required"],
     [/\/\/ @name\s+NeuroSort/, "userscript name must be NeuroSort"],
-    [/\/\/ @version\s+1\.1\.18/, "userscript version must be 1.1.18"],
+    [/\/\/ @version\s+1\.1\.19/, "userscript version must be 1.1.19"],
     [/\/\/ @include\s+chrome:\/\/browser\/content\/browser\.xhtml/, "Sine chrome include is required"],
-    [/\/\/ NeuroSort generated artifact version 1\.1\.18/, "generated version comment is required"]
+    [/\/\/ NeuroSort generated artifact version 1\.1\.19/, "generated version comment is required"]
   ];
 
   for (const [pattern, message] of checks) {

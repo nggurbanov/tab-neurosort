@@ -1,8 +1,8 @@
-// NeuroSort generated artifact version 1.1.18
+// NeuroSort generated artifact version 1.1.19
 // ==UserScript==
 // @name           NeuroSort
 // @description    AI-assisted tab grouping for Zen Browser/Sine
-// @version        1.1.18
+// @version        1.1.19
 // @author         Tyrell
 // @include        chrome://browser/content/browser.xhtml
 // @run-at         browser
@@ -1666,7 +1666,7 @@ var NeuroSort = (() => {
   };
 
   // src/main.ts
-  var NEUROSORT_VERSION = "1.1.18";
+  var NEUROSORT_VERSION = "1.1.19";
   var createBootstrapMessage = () => {
     return `NeuroSort ${NEUROSORT_VERSION} toolchain bootstrap loaded`;
   };

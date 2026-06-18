@@ -115,10 +115,41 @@ const createBroomButton = (
   button.setAttribute("type", "button");
   button.setAttribute("aria-label", "NeuroSort");
   button.setAttribute("title", "NeuroSort");
+  button.setAttribute(
+    "style",
+    [
+      "appearance:none",
+      "display:inline-flex",
+      "align-items:center",
+      "justify-content:center",
+      "width:24px",
+      "height:24px",
+      "min-width:24px",
+      "min-height:24px",
+      "margin:0",
+      "padding:0",
+      "border:0",
+      "border-radius:6px",
+      "background:transparent",
+      "color:var(--toolbarbutton-icon-fill, var(--zen-text-primary, CanvasText))",
+      "cursor:pointer",
+    ].join(";"),
+  );
   const icon = document.createElement("span");
   icon.classList.add("neurosort-broom-icon");
   icon.setAttribute("aria-hidden", "true");
-  appendText(document, icon, "✦");
+  icon.setAttribute(
+    "style",
+    [
+      "display:block",
+      "font-family:'Apple Color Emoji','Segoe UI Emoji',sans-serif",
+      "font-size:15px",
+      "line-height:1",
+      "pointer-events:none",
+      "transform:translateY(-0.5px)",
+    ].join(";"),
+  );
+  appendText(document, icon, "🧹");
   button.appendChild(icon);
   button.addEventListener("click", actions.tidyUngrouped);
   button.addEventListener("contextmenu", () => {

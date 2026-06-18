@@ -153,7 +153,7 @@ describe("browser chrome", () => {
     expect(initialText).not.toContain("Tidy ungrouped tabs");
     expect(initialText).not.toContain("Settings");
     expect(initialText).not.toContain("Provider");
-    expect(initialText).toContain("✦");
+    expect(initialText).toContain("🧹");
     expect(mount.root.querySelector(".neurosort-menu")).not.toBeNull();
     expect(button.text()).not.toContain("Broom");
     expect(button.dataset["aria-label"]).toBe("NeuroSort");
@@ -205,7 +205,7 @@ describe("browser chrome", () => {
     // Then
     expect(document.body.text()).not.toContain("adapter_failed");
     expect(document.body.text()).not.toContain("Tab grouping is unavailable");
-    expect(document.body.text()).toBe("✦!");
+    expect(document.body.text()).toBe("🧹!");
   });
 
   it("Given toast text includes malformed provider output When shown and dismissed Then it never writes innerHTML", () => {

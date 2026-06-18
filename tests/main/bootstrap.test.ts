@@ -47,12 +47,14 @@ const createRuntime = (): {
   readonly tidyCalls: readonly TidyCall[];
   readonly undoCalls: () => number;
   readonly keyEvents: readonly FakeKeyboardEvent[];
+  readonly runTimers: () => void;
   readonly app: NeuroSortApp;
 } => {
   const document = new FakeChromeDocument();
   const tidyCalls: TidyCall[] = [];
   let undoCalls = 0;
   const keyEvents: FakeKeyboardEvent[] = [];
+  const timerCallbacks: Array<() => void> = [];
   const app: NeuroSortApp = {
     tidy: async (request) => {
       tidyCalls.push(request);
@@ -104,18 +106,42 @@ const createRuntime = (): {
           listener(undo);
         }
       },
+      setTimeout: (callback: () => void) => {
+        timerCallbacks.push(callback);
+      },
       __testApp: app,
     },
     document,
     tidyCalls,
     undoCalls: () => undoCalls,
     keyEvents,
+    runTimers: () => {
+      [...timerCallbacks].forEach((callback) => {
+        callback();
+      });
+    },
     app,
   };
 };
 
 const buttonWithText = (document: FakeChromeDocument, text: string): FakeChromeElement | null => {
   return document.body.querySelectorAll("button").find((button) => button.text() === text) ?? null;
+};
+
+const createRuntimeWithMountTargets = (): {
+  readonly runtime: Record<string, unknown>;
+  readonly separator: FakeChromeElement;
+  readonly activeWorkspaceStrip: FakeChromeElement;
+  readonly app: NeuroSortApp;
+} => {
+  const { runtime, document, app } = createRuntime();
+  const separator = document.createXULElement("hbox");
+  separator.classList.add("pinned-tabs-container-separator");
+  const activeWorkspaceStrip = document.createXULElement("vbox");
+  document.body.appendChild(separator);
+  document.body.appendChild(activeWorkspaceStrip);
+  Reflect.set(runtime, "gZenWorkspaces", { activeWorkspace: "work", activeWorkspaceStrip });
+  return { runtime, separator, activeWorkspaceStrip, app };
 };
 
 describe("NeuroSort browser bootstrap", () => {
@@ -155,6 +181,40 @@ describe("NeuroSort browser bootstrap", () => {
 
     // Then
     expect(keyEvents.map((event) => event.defaultPrevented)).toEqual([true, true]);
+  });
+
+  it("Given Zen chrome exposes a separator When NeuroSort installs Then the broom mounts in the visible chrome target", () => {
+    // Given
+    const { runtime, separator, activeWorkspaceStrip, app } = createRuntimeWithMountTargets();
+
+    // When
+    installNeuroSort(runtime, { createApp: () => app });
+
+    // Then
+    expect(separator.querySelector(".neurosort-broom")).not.toBeNull();
+    expect(activeWorkspaceStrip.querySelector(".neurosort-broom")).toBeNull();
+  });
+
+  it("Given Zen chrome target appears late When retry timer fires Then the broom moves out of fallback", () => {
+    // Given
+    const { runtime, document, runTimers, app } = createRuntime();
+    const activeWorkspaceStrip = document.createXULElement("vbox");
+    document.body.appendChild(activeWorkspaceStrip);
+    Reflect.set(runtime, "gZenWorkspaces", { activeWorkspace: "work", activeWorkspaceStrip });
+
+    // When
+    installNeuroSort(runtime, { createApp: () => app });
+    const fallbackRoot = requireFakeElement(document.body.querySelector(".neurosort-chrome"));
+    const separator = document.createXULElement("hbox");
+    separator.classList.add("pinned-tabs-container-separator");
+    document.body.appendChild(separator);
+    runTimers();
+
+    // Then
+    expect(fallbackRoot.parentNode).toBe(separator);
+    expect(fallbackRoot.classList.has("neurosort-chrome-fallback")).toBe(false);
+    expect(separator.querySelector(".neurosort-broom")).not.toBeNull();
+    expect(activeWorkspaceStrip.querySelector(".neurosort-broom")).toBeNull();
   });
 });
 

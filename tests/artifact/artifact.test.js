@@ -15,8 +15,8 @@ describe("generated userscript artifact", () => {
     expect(result.ok).toBe(true);
     expect(artifact).toContain("// ==UserScript==");
     expect(artifact).toContain("// @name           NeuroSort");
-    expect(artifact).toContain("// @version        1.1.19");
-    expect(artifact).toContain("// NeuroSort generated artifact version 1.1.19");
+    expect(artifact).toContain("// @version        1.1.20");
+    expect(artifact).toContain("// NeuroSort generated artifact version 1.1.20");
     expect(artifact).toContain("var NeuroSort = (() => {");
   });
 

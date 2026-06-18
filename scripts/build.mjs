@@ -2,7 +2,7 @@ import { build } from "esbuild";
 import { rm } from "node:fs/promises";
 
 const outfile = "neurosort.uc.js";
-const version = "1.1.19";
+const version = "1.1.20";
 
 await rm(outfile, { force: true });
 

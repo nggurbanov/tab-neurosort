@@ -1,14 +1,166 @@
-// NeuroSort generated artifact version 1.1.19
+// NeuroSort generated artifact version 1.1.20
 // ==UserScript==
 // @name           NeuroSort
 // @description    AI-assisted tab grouping for Zen Browser/Sine
-// @version        1.1.19
+// @version        1.1.20
 // @author         Tyrell
 // @include        chrome://browser/content/browser.xhtml
 // @run-at         browser
 // @ignorecache
 // ==/UserScript==
 var NeuroSort = (() => {
+  // src/browserRuntime.ts
+  var chromeMountSelectors = [
+    ".pinned-tabs-container-separator",
+    "#zen-workspaces-button",
+    "#zen-sidebar-top-buttons-customization-target",
+    ".zen-sidebar-top",
+    "#zen-sidebar",
+    ".zen-vertical-tabs",
+    "#TabsToolbar",
+    "#tabbrowser-tabs",
+    "#navigator-toolbox",
+    "tabbox"
+  ];
+  var resolveBrowserRuntime = (runtime) => {
+    const document = getProperty(runtime, "document");
+    const workspace = getProperty(runtime, "gZenWorkspaces");
+    const toolbar = isChromeDocument(document) ? resolveChromeToolbar(document) : null;
+    const gBrowser = getProperty(runtime, "gBrowser");
+    if (!isChromeDocument(document) || toolbar === null) {
+      return null;
+    }
+    const tabContainer = getProperty(gBrowser, "tabContainer");
+    return {
+      document,
+      toolbar: toolbar.element,
+      toolbarKind: toolbar.kind,
+      workspaceId: readWorkspaceId(workspace),
+      prefs: readPrefs(runtime),
+      tabs: readTabs(gBrowser),
+      tabContainer: isElementContainer(tabContainer) ? tabContainer : null,
+      observer: readObserver(runtime),
+      addKeyListener: readKeyListener(runtime, document),
+      scheduleTimeout: readTimeoutScheduler(runtime)
+    };
+  };
+  var settingsFromPrefs = (prefs) => {
+    const provider = readString(prefs, "extensions.neurosort.provider", "disabled") ?? "disabled";
+    const prefix = `extensions.neurosort.${provider}`;
+    return {
+      providerLabel: provider,
+      modelLabel: readString(prefs, `${prefix}.model`, "") ?? "",
+      endpointLabel: readString(prefs, `${prefix}.endpoint`, "") ?? "",
+      apiKey: readString(prefs, `${prefix}.api_key`, "") ?? ""
+    };
+  };
+  var selectedTabIds = (tabs) => {
+    return tabs.filter(isSelectedTab).map((tab) => tab.id);
+  };
+  var ungroupedTabCount = (tabs, workspaceId) => {
+    return tabs.filter((tab) => isCurrentWorkspaceTab(tab, workspaceId) && getProperty(tab, "group") === null).length;
+  };
+  var readString = (prefs, name, fallback) => {
+    return prefs !== null && prefs.prefHasUserValue(name) && prefs.getPrefType(name) === prefs.PREF_STRING ? prefs.getStringPref(name) : fallback;
+  };
+  var readBool = (prefs, name, fallback) => {
+    return prefs !== null && prefs.prefHasUserValue(name) && prefs.getPrefType(name) === prefs.PREF_BOOL ? prefs.getBoolPref(name) : fallback;
+  };
+  var readInt = (prefs, name, fallback) => {
+    return prefs !== null && prefs.prefHasUserValue(name) && prefs.getPrefType(name) === prefs.PREF_INT ? prefs.getIntPref(name) : fallback;
+  };
+  var resolvePreferredChromeToolbar = (document) => {
+    for (const selector of chromeMountSelectors) {
+      const candidate = document.querySelector(selector);
+      if (candidate !== null) {
+        return candidate;
+      }
+    }
+    return null;
+  };
+  var chromeFallbackSelectors = ["#browser", "#appcontent", "#main-window"];
+  var resolveChromeToolbar = (document) => {
+    const preferred = resolvePreferredChromeToolbar(document);
+    if (preferred !== null) {
+      return { element: preferred, kind: "preferred" };
+    }
+    for (const selector of chromeFallbackSelectors) {
+      const candidate = document.querySelector(selector);
+      if (candidate !== null) {
+        return { element: candidate, kind: "fallback" };
+      }
+    }
+    return { element: document.body, kind: "fallback" };
+  };
+  var readWorkspaceId = (workspace) => {
+    const activeWorkspace = getProperty(workspace, "activeWorkspace");
+    return typeof activeWorkspace === "string" && activeWorkspace.length > 0 ? activeWorkspace : "default";
+  };
+  var readPrefs = (runtime) => {
+    const prefs = getProperty(getProperty(runtime, "Services"), "prefs");
+    return isPrefs(prefs) ? prefs : null;
+  };
+  var readTabs = (gBrowser) => {
+    const tabs = getProperty(gBrowser, "tabs");
+    return Array.isArray(tabs) ? tabs : [];
+  };
+  var readObserver = (runtime) => {
+    const observer = getProperty(runtime, "MutationObserver") ?? getProperty(globalThis, "MutationObserver");
+    return isMutationObserverConstructor(observer) ? observer : null;
+  };
+  var readKeyListener = (runtime, document) => {
+    const addRuntimeListener = getProperty(runtime, "addEventListener");
+    if (typeof addRuntimeListener === "function") {
+      return (listener) => {
+        addRuntimeListener.call(runtime, "keydown", listener);
+      };
+    }
+    const addDocumentListener = getProperty(document, "addEventListener");
+    if (typeof addDocumentListener === "function") {
+      return (listener) => {
+        addDocumentListener.call(document, "keydown", listener);
+      };
+    }
+    return null;
+  };
+  var readTimeoutScheduler = (runtime) => {
+    const runtimeTimer = getProperty(runtime, "setTimeout");
+    if (typeof runtimeTimer === "function") {
+      return (callback, delayMs) => {
+        void runtimeTimer.call(runtime, callback, delayMs);
+      };
+    }
+    const globalTimer = getProperty(globalThis, "setTimeout");
+    if (typeof globalTimer === "function") {
+      return (callback, delayMs) => {
+        void globalTimer.call(globalThis, callback, delayMs);
+      };
+    }
+    return null;
+  };
+  var isSelectedTab = (tab) => {
+    return typeof getProperty(tab, "id") === "string" && (getProperty(tab, "selected") === true || getProperty(tab, "multiselected") === true);
+  };
+  var isCurrentWorkspaceTab = (tab, workspaceId) => {
+    const tabWorkspace = getProperty(tab, "workspaceId");
+    return typeof tabWorkspace !== "string" || tabWorkspace === workspaceId;
+  };
+  var isChromeDocument = (value) => {
+    return typeof getProperty(value, "createElement") === "function" && typeof getProperty(value, "createTextNode") === "function" && typeof getProperty(value, "querySelector") === "function" && typeof getProperty(value, "querySelectorAll") === "function";
+  };
+  var isElementContainer = (value) => {
+    return typeof getProperty(value, "appendChild") === "function" && typeof getProperty(value, "querySelectorAll") === "function";
+  };
+  var isPrefs = (value) => {
+    return typeof getProperty(value, "PREF_STRING") === "number" && typeof getProperty(value, "prefHasUserValue") === "function" && typeof getProperty(value, "getPrefType") === "function";
+  };
+  var isMutationObserverConstructor = (value) => {
+    return typeof value === "function" && typeof getProperty(getProperty(value, "prototype"), "observe") === "function" && typeof getProperty(getProperty(value, "prototype"), "disconnect") === "function";
+  };
+  var getProperty = (value, key) => {
+    return typeof value === "object" && value !== null || typeof value === "function" ? Reflect.get(value, key) : void 0;
+  };
+
   // src/core/autoTidy.ts
   var createAutoTidyController = (policy, coordinator, clock) => {
     let lastRunAt = null;
@@ -440,7 +592,7 @@ var NeuroSort = (() => {
     if (!isRecord(entry)) {
       return [];
     }
-    const category = cleanCategory(readString(entry, ["category", "name", "label", "group"]));
+    const category = cleanCategory(readString2(entry, ["category", "name", "label", "group"]));
     if (category === null) {
       return [];
     }
@@ -448,7 +600,7 @@ var NeuroSort = (() => {
     if (tabIds.length > 0) {
       return tabIds.filter((tabId2) => validIds.has(tabId2)).map((tabId2) => ({ tabId: tabId2, category }));
     }
-    const tabId = readString(entry, ["tabId", "id"]);
+    const tabId = readString2(entry, ["tabId", "id"]);
     if (tabId !== null && validIds.has(tabId)) {
       return [{ tabId, category }];
     }
@@ -478,7 +630,7 @@ var NeuroSort = (() => {
     }
     return cleanCategory(rest.slice(1));
   };
-  var readString = (entry, keys) => {
+  var readString2 = (entry, keys) => {
     for (const key of keys) {
       const value = entry[key];
       if (typeof value === "string") {
@@ -1003,15 +1155,15 @@ var NeuroSort = (() => {
 
   // src/zen/adapter.ts
   var resolveZenAdapter = (runtime) => {
-    const gBrowser = getProperty(runtime, "gBrowser");
+    const gBrowser = getProperty2(runtime, "gBrowser");
     if (!isZenGBrowser(gBrowser)) {
       return missingCapability("gBrowser.moveTabToGroup");
     }
-    const gZenWorkspaces = getProperty(runtime, "gZenWorkspaces");
+    const gZenWorkspaces = getProperty2(runtime, "gZenWorkspaces");
     if (!isZenWorkspaces(gZenWorkspaces)) {
       return missingCapability("gZenWorkspaces.activeWorkspace");
     }
-    const document = getProperty(runtime, "document");
+    const document = getProperty2(runtime, "document");
     if (!isPlatformDocument(document)) {
       return missingCapability("document.createXULElement");
     }
@@ -1067,33 +1219,33 @@ var NeuroSort = (() => {
     return { ...tab, groupId: group.id };
   };
   var isZenGBrowser = (value) => {
-    return hasTabArray(value, "tabs") && isElementContainer(getProperty(value, "tabContainer")) && isCallable(getProperty(value, "moveTabToGroup")) && isCallable(getProperty(value, "ungroupTab")) && isCallable(getProperty(value, "removeTabGroup"));
+    return hasTabArray(value, "tabs") && isElementContainer2(getProperty2(value, "tabContainer")) && isCallable(getProperty2(value, "moveTabToGroup")) && isCallable(getProperty2(value, "ungroupTab")) && isCallable(getProperty2(value, "removeTabGroup"));
   };
   var isZenWorkspaces = (value) => {
-    const activeWorkspace = getProperty(value, "activeWorkspace");
-    return (typeof activeWorkspace === "string" || activeWorkspace === null) && isElementContainer(getProperty(value, "activeWorkspaceStrip"));
+    const activeWorkspace = getProperty2(value, "activeWorkspace");
+    return (typeof activeWorkspace === "string" || activeWorkspace === null) && isElementContainer2(getProperty2(value, "activeWorkspaceStrip"));
   };
   var isPlatformDocument = (value) => {
-    return isCallable(getProperty(value, "createXULElement")) && isCallable(getProperty(value, "querySelector")) && isCallable(getProperty(value, "querySelectorAll")) && isElementContainer(getProperty(value, "body"));
+    return isCallable(getProperty2(value, "createXULElement")) && isCallable(getProperty2(value, "querySelector")) && isCallable(getProperty2(value, "querySelectorAll")) && isElementContainer2(getProperty2(value, "body"));
   };
   var isPlatformTabGroup = (value) => {
-    return typeof getProperty(value, "id") === "string" && typeof getProperty(value, "label") === "string" && typeof getProperty(value, "color") === "string" && hasTabArray(value, "tabs") && isCallable(getProperty(value, "addTabs"));
+    return typeof getProperty2(value, "id") === "string" && typeof getProperty2(value, "label") === "string" && typeof getProperty2(value, "color") === "string" && hasTabArray(value, "tabs") && isCallable(getProperty2(value, "addTabs"));
   };
   var hasTabArray = (value, key) => {
-    const tabs = getProperty(value, key);
+    const tabs = getProperty2(value, key);
     return Array.isArray(tabs) && tabs.every(isPlatformTab);
   };
   var isPlatformTab = (value) => {
-    const workspaceId = getProperty(value, "workspaceId");
-    return typeof getProperty(value, "id") === "string" && typeof getProperty(value, "title") === "string" && typeof getProperty(value, "url") === "string" && typeof getProperty(value, "pinned") === "boolean" && typeof getProperty(value, "closing") === "boolean" && (typeof workspaceId === "string" || workspaceId === null);
+    const workspaceId = getProperty2(value, "workspaceId");
+    return typeof getProperty2(value, "id") === "string" && typeof getProperty2(value, "title") === "string" && typeof getProperty2(value, "url") === "string" && typeof getProperty2(value, "pinned") === "boolean" && typeof getProperty2(value, "closing") === "boolean" && (typeof workspaceId === "string" || workspaceId === null);
   };
-  var isElementContainer = (value) => {
-    return isCallable(getProperty(value, "appendChild")) && isCallable(getProperty(value, "insertBefore")) && isCallable(getProperty(value, "removeChild")) && isCallable(getProperty(value, "querySelector")) && isCallable(getProperty(value, "querySelectorAll"));
+  var isElementContainer2 = (value) => {
+    return isCallable(getProperty2(value, "appendChild")) && isCallable(getProperty2(value, "insertBefore")) && isCallable(getProperty2(value, "removeChild")) && isCallable(getProperty2(value, "querySelector")) && isCallable(getProperty2(value, "querySelectorAll"));
   };
   var isCallable = (value) => {
     return typeof value === "function";
   };
-  var getProperty = (value, key) => {
+  var getProperty2 = (value, key) => {
     if (typeof value !== "object" || value === null) {
       return void 0;
     }
@@ -1147,18 +1299,18 @@ var NeuroSort = (() => {
 
   // src/runtime/preferences.ts
   var readRuntimePreferences = (prefs) => {
-    const provider = readString2(prefs, "extensions.neurosort.provider", "disabled");
+    const provider = readString3(prefs, "extensions.neurosort.provider", "disabled");
     return {
-      enabled: readBool(prefs, "extensions.neurosort.enabled", true),
-      fetchDescriptions: readBool(prefs, "extensions.neurosort.fetch_descriptions", false),
-      minGroupSize: readInt(prefs, "extensions.neurosort.min_group_size", 2),
-      preservePinned: readBool(prefs, "extensions.neurosort.preserve_pinned", true),
+      enabled: readBool2(prefs, "extensions.neurosort.enabled", true),
+      fetchDescriptions: readBool2(prefs, "extensions.neurosort.fetch_descriptions", false),
+      minGroupSize: readInt2(prefs, "extensions.neurosort.min_group_size", 2),
+      preservePinned: readBool2(prefs, "extensions.neurosort.preserve_pinned", true),
       provider: providerSettings(provider, prefs)
     };
   };
   var readRuntimePreferencesFromRuntime = (runtime) => {
-    const services = getProperty2(runtime, "Services");
-    const prefs = getProperty2(services, "prefs");
+    const services = getProperty3(runtime, "Services");
+    const prefs = getProperty3(services, "prefs");
     return isPlatformPrefs(prefs) ? readRuntimePreferences(prefs) : null;
   };
   var providerSettings = (provider, prefs) => {
@@ -1166,58 +1318,58 @@ var NeuroSort = (() => {
       case "openai":
         return {
           provider,
-          consentToSendData: readBool(prefs, "extensions.neurosort.data_consent", false),
-          endpoint: readString2(prefs, "extensions.neurosort.openai.endpoint", ""),
-          apiKey: readString2(prefs, "extensions.neurosort.openai.api_key", ""),
-          model: readString2(prefs, "extensions.neurosort.openai.model", "")
+          consentToSendData: readBool2(prefs, "extensions.neurosort.data_consent", false),
+          endpoint: readString3(prefs, "extensions.neurosort.openai.endpoint", ""),
+          apiKey: readString3(prefs, "extensions.neurosort.openai.api_key", ""),
+          model: readString3(prefs, "extensions.neurosort.openai.model", "")
         };
       case "gemini":
         return {
           provider,
-          consentToSendData: readBool(prefs, "extensions.neurosort.data_consent", false),
-          apiKey: readString2(prefs, "extensions.neurosort.gemini.api_key", ""),
-          model: readString2(prefs, "extensions.neurosort.gemini.model", "")
+          consentToSendData: readBool2(prefs, "extensions.neurosort.data_consent", false),
+          apiKey: readString3(prefs, "extensions.neurosort.gemini.api_key", ""),
+          model: readString3(prefs, "extensions.neurosort.gemini.model", "")
         };
       case "ollama":
         return {
           provider,
-          consentToSendData: readBool(prefs, "extensions.neurosort.data_consent", false),
-          endpoint: readString2(prefs, "extensions.neurosort.ollama.endpoint", ""),
-          model: readString2(prefs, "extensions.neurosort.ollama.model", "")
+          consentToSendData: readBool2(prefs, "extensions.neurosort.data_consent", false),
+          endpoint: readString3(prefs, "extensions.neurosort.ollama.endpoint", ""),
+          model: readString3(prefs, "extensions.neurosort.ollama.model", "")
         };
       case "custom":
         return {
           provider,
-          consentToSendData: readBool(prefs, "extensions.neurosort.data_consent", false),
-          endpoint: readString2(prefs, "extensions.neurosort.custom.endpoint", ""),
-          apiKey: readString2(prefs, "extensions.neurosort.custom.api_key", ""),
-          model: readString2(prefs, "extensions.neurosort.custom.model", ""),
+          consentToSendData: readBool2(prefs, "extensions.neurosort.data_consent", false),
+          endpoint: readString3(prefs, "extensions.neurosort.custom.endpoint", ""),
+          apiKey: readString3(prefs, "extensions.neurosort.custom.api_key", ""),
+          model: readString3(prefs, "extensions.neurosort.custom.model", ""),
           format: readCustomFormat(prefs)
         };
       default:
-        return { provider: "disabled", consentToSendData: readBool(prefs, "extensions.neurosort.data_consent", false) };
+        return { provider: "disabled", consentToSendData: readBool2(prefs, "extensions.neurosort.data_consent", false) };
     }
   };
   var readCustomFormat = (prefs) => {
-    const value = readString2(prefs, "extensions.neurosort.custom.format", "openai_chat");
+    const value = readString3(prefs, "extensions.neurosort.custom.format", "openai_chat");
     return value === "ollama_generate" || value === "ollama" ? "ollama" : "openai";
   };
-  var readString2 = (prefs, name, fallback) => {
+  var readString3 = (prefs, name, fallback) => {
     return prefs.prefHasUserValue(name) && prefs.getPrefType(name) === prefs.PREF_STRING ? prefs.getStringPref(name) : fallback;
   };
-  var readBool = (prefs, name, fallback) => {
+  var readBool2 = (prefs, name, fallback) => {
     return prefs.prefHasUserValue(name) && prefs.getPrefType(name) === prefs.PREF_BOOL ? prefs.getBoolPref(name) : fallback;
   };
-  var readInt = (prefs, name, fallback) => {
+  var readInt2 = (prefs, name, fallback) => {
     return prefs.prefHasUserValue(name) && prefs.getPrefType(name) === prefs.PREF_INT ? prefs.getIntPref(name) : fallback;
   };
   var isPlatformPrefs = (value) => {
-    return typeof getProperty2(value, "PREF_STRING") === "number" && typeof getProperty2(value, "PREF_INT") === "number" && typeof getProperty2(value, "PREF_BOOL") === "number" && isCallable2(getProperty2(value, "prefHasUserValue")) && isCallable2(getProperty2(value, "getPrefType")) && isCallable2(getProperty2(value, "getStringPref")) && isCallable2(getProperty2(value, "getIntPref")) && isCallable2(getProperty2(value, "getBoolPref"));
+    return typeof getProperty3(value, "PREF_STRING") === "number" && typeof getProperty3(value, "PREF_INT") === "number" && typeof getProperty3(value, "PREF_BOOL") === "number" && isCallable2(getProperty3(value, "prefHasUserValue")) && isCallable2(getProperty3(value, "getPrefType")) && isCallable2(getProperty3(value, "getStringPref")) && isCallable2(getProperty3(value, "getIntPref")) && isCallable2(getProperty3(value, "getBoolPref"));
   };
   var isCallable2 = (value) => {
     return typeof value === "function";
   };
-  var getProperty2 = (value, key) => {
+  var getProperty3 = (value, key) => {
     if (typeof value !== "object" || value === null) {
       return void 0;
     }
@@ -1464,6 +1616,10 @@ var NeuroSort = (() => {
   };
 
   // src/ui/dom.ts
+  var createChromeElement = (document, tagName, fallbackTagName = tagName) => {
+    const createXULElement = document.createXULElement;
+    return typeof createXULElement === "function" ? createXULElement.call(document, tagName) : document.createElement(fallbackTagName);
+  };
   var appendText = (document, parent, text) => {
     parent.appendChild(document.createTextNode(text));
   };
@@ -1474,15 +1630,139 @@ var NeuroSort = (() => {
     element.textContent = "";
   };
 
+  // src/ui/browserChromeControls.ts
+  var nextChromeId = 1;
+  var createBroomButton = (document, workspaceId, actions) => {
+    const button = createChromeElement(document, "toolbarbutton", "button");
+    button.id = `neurosort-broom-${safeIdPart(workspaceId)}-${nextChromeId}`;
+    nextChromeId += 1;
+    button.classList.add("neurosort-broom");
+    button.setAttribute("type", "button");
+    button.setAttribute("aria-label", "NeuroSort");
+    button.setAttribute("title", "NeuroSort");
+    button.setAttribute("tooltiptext", "NeuroSort");
+    button.setAttribute("style", broomStyle);
+    const icon = createChromeElement(document, "label", "span");
+    icon.classList.add("neurosort-broom-icon");
+    icon.setAttribute("aria-hidden", "true");
+    icon.setAttribute("style", broomIconStyle);
+    appendText(document, icon, "\u{1F9F9}");
+    button.appendChild(icon);
+    button.addEventListener("click", (event) => {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      actions.tidyUngrouped();
+    });
+    button.addEventListener("contextmenu", (event) => {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      const root = button.parentNode;
+      if (root === null) {
+        return;
+      }
+      ensureCommandPanel(document, root, actions);
+      root.classList.add("neurosort-menu-open");
+    });
+    return button;
+  };
+  var runCommand = (command, actions) => {
+    switch (command) {
+      case "tidy-ungrouped":
+        actions.tidyUngrouped();
+        return;
+      case "tidy-all":
+        actions.tidyAll();
+        return;
+      case "tidy-selected":
+        actions.tidySelected();
+        return;
+      case "undo":
+        actions.undoLastTidy();
+        return;
+      case "settings":
+        actions.openSettings();
+        return;
+      default:
+        assertNever5(command);
+    }
+  };
+  var ensureCommandPanel = (document, root, actions) => {
+    if (root.querySelector(".neurosort-menu") !== null) {
+      return;
+    }
+    root.appendChild(createContextMenu(document, actions));
+  };
+  var createContextMenu = (document, actions) => {
+    const menu = document.createElement("menu");
+    menu.classList.add("neurosort-menu");
+    appendMenuButton(document, menu, "tidy-ungrouped", "Tidy ungrouped tabs", actions.tidyUngrouped);
+    appendMenuButton(document, menu, "tidy-all", "Tidy all tabs", actions.tidyAll);
+    appendMenuButton(document, menu, "tidy-selected", "Tidy selected tabs", actions.tidySelected);
+    appendMenuButton(document, menu, "undo", "Undo last tidy", actions.undoLastTidy);
+    appendMenuButton(document, menu, "settings", "Settings", actions.openSettings);
+    return menu;
+  };
+  var appendMenuButton = (document, menu, command, label, action) => {
+    const item = document.createElement("button");
+    item.classList.add("neurosort-menu-item");
+    item.setAttribute("type", "button");
+    item.setAttribute("data-command", command);
+    appendText(document, item, label);
+    item.addEventListener("click", action);
+    menu.appendChild(item);
+  };
+  var safeIdPart = (value) => {
+    const safe = value.toLowerCase().split("").map((char) => isIdChar(char) ? char : "-").join("").replace(/-+/g, "-");
+    return safe.length === 0 ? "workspace" : safe;
+  };
+  var isIdChar = (char) => /^[a-z0-9_-]$/.test(char);
+  var assertNever5 = (value) => {
+    throw new UnexpectedChromeCommandError(value);
+  };
+  var UnexpectedChromeCommandError = class extends Error {
+    constructor(value) {
+      super("Unexpected browser chrome command");
+      this.value = value;
+    }
+    name = "UnexpectedChromeCommandError";
+  };
+  var broomStyle = [
+    "appearance:none",
+    "display:inline-flex",
+    "align-items:center",
+    "justify-content:center",
+    "width:24px",
+    "height:24px",
+    "min-width:24px",
+    "min-height:24px",
+    "margin:0",
+    "padding:0",
+    "border:0",
+    "border-radius:6px",
+    "background:transparent",
+    "color:var(--toolbarbutton-icon-fill, var(--zen-text-primary, CanvasText))",
+    "cursor:pointer"
+  ].join(";");
+  var broomIconStyle = [
+    "display:block",
+    "font-family:'Apple Color Emoji','Segoe UI Emoji',sans-serif",
+    "font-size:15px",
+    "line-height:1",
+    "pointer-events:none",
+    "transform:translateY(-0.5px)"
+  ].join(";");
+
   // src/ui/browserChrome.ts
   var mountedChromes = [];
-  var nextChromeId = 1;
   var mountBrowserChrome = (options) => {
-    const root = options.document.createElement("div");
+    const root = createChromeElement(options.document, "hbox", "div");
     root.classList.add("neurosort-chrome");
+    if (options.toolbarKind === "fallback") {
+      root.classList.add("neurosort-chrome-fallback");
+    }
     root.setAttribute("data-workspace-id", options.workspaceId);
     const button = createBroomButton(options.document, options.workspaceId, options.actions);
-    const badge = options.document.createElement("span");
+    const badge = createChromeElement(options.document, "label", "span");
     badge.classList.add("neurosort-badge");
     button.appendChild(badge);
     root.appendChild(button);
@@ -1516,86 +1796,6 @@ var NeuroSort = (() => {
       }
     };
   };
-  var createBroomButton = (document, workspaceId, actions) => {
-    const button = document.createElement("button");
-    button.id = `neurosort-broom-${safeIdPart(workspaceId)}-${nextChromeId}`;
-    nextChromeId += 1;
-    button.classList.add("neurosort-broom");
-    button.setAttribute("type", "button");
-    button.setAttribute("aria-label", "NeuroSort");
-    button.setAttribute("title", "NeuroSort");
-    button.setAttribute(
-      "style",
-      [
-        "appearance:none",
-        "display:inline-flex",
-        "align-items:center",
-        "justify-content:center",
-        "width:24px",
-        "height:24px",
-        "min-width:24px",
-        "min-height:24px",
-        "margin:0",
-        "padding:0",
-        "border:0",
-        "border-radius:6px",
-        "background:transparent",
-        "color:var(--toolbarbutton-icon-fill, var(--zen-text-primary, CanvasText))",
-        "cursor:pointer"
-      ].join(";")
-    );
-    const icon = document.createElement("span");
-    icon.classList.add("neurosort-broom-icon");
-    icon.setAttribute("aria-hidden", "true");
-    icon.setAttribute(
-      "style",
-      [
-        "display:block",
-        "font-family:'Apple Color Emoji','Segoe UI Emoji',sans-serif",
-        "font-size:15px",
-        "line-height:1",
-        "pointer-events:none",
-        "transform:translateY(-0.5px)"
-      ].join(";")
-    );
-    appendText(document, icon, "\u{1F9F9}");
-    button.appendChild(icon);
-    button.addEventListener("click", actions.tidyUngrouped);
-    button.addEventListener("contextmenu", () => {
-      const root = button.parentNode;
-      if (root === null) {
-        return;
-      }
-      ensureCommandPanel(document, root, actions);
-      root.classList.add("neurosort-menu-open");
-    });
-    return button;
-  };
-  var ensureCommandPanel = (document, root, actions) => {
-    if (root.querySelector(".neurosort-menu") !== null) {
-      return;
-    }
-    root.appendChild(createContextMenu(document, actions));
-  };
-  var createContextMenu = (document, actions) => {
-    const menu = document.createElement("menu");
-    menu.classList.add("neurosort-menu");
-    appendMenuButton(document, menu, "tidy-ungrouped", "Tidy ungrouped tabs", actions.tidyUngrouped);
-    appendMenuButton(document, menu, "tidy-all", "Tidy all tabs", actions.tidyAll);
-    appendMenuButton(document, menu, "tidy-selected", "Tidy selected tabs", actions.tidySelected);
-    appendMenuButton(document, menu, "undo", "Undo last tidy", actions.undoLastTidy);
-    appendMenuButton(document, menu, "settings", "Settings", actions.openSettings);
-    return menu;
-  };
-  var appendMenuButton = (document, menu, command, label, action) => {
-    const item = document.createElement("button");
-    item.classList.add("neurosort-menu-item");
-    item.setAttribute("type", "button");
-    item.setAttribute("data-command", command);
-    appendText(document, item, label);
-    item.addEventListener("click", action);
-    menu.appendChild(item);
-  };
   var updateMountedChrome = (chrome, status, document) => {
     clearChildren(chrome.badge);
     const badgeText = getBadgeText(status);
@@ -1613,27 +1813,6 @@ var NeuroSort = (() => {
       }
     };
   };
-  var runCommand = (command, actions) => {
-    switch (command) {
-      case "tidy-ungrouped":
-        actions.tidyUngrouped();
-        return;
-      case "tidy-all":
-        actions.tidyAll();
-        return;
-      case "tidy-selected":
-        actions.tidySelected();
-        return;
-      case "undo":
-        actions.undoLastTidy();
-        return;
-      case "settings":
-        actions.openSettings();
-        return;
-      default:
-        assertNever5(command);
-    }
-  };
   var getBadgeText = (status) => {
     switch (status.kind) {
       case "ready":
@@ -1646,15 +1825,10 @@ var NeuroSort = (() => {
       case "error":
         return "!";
       default:
-        return assertNever5(status);
+        return assertNever6(status);
     }
   };
-  var safeIdPart = (value) => {
-    const safe = value.toLowerCase().split("").map((char) => isIdChar(char) ? char : "-").join("").replace(/-+/g, "-");
-    return safe.length === 0 ? "workspace" : safe;
-  };
-  var isIdChar = (char) => /^[a-z0-9_-]$/.test(char);
-  var assertNever5 = (value) => {
+  var assertNever6 = (value) => {
     throw new UnexpectedChromeVariantError(value);
   };
   var UnexpectedChromeVariantError = class extends Error {
@@ -1666,7 +1840,7 @@ var NeuroSort = (() => {
   };
 
   // src/main.ts
-  var NEUROSORT_VERSION = "1.1.19";
+  var NEUROSORT_VERSION = "1.1.20";
   var createBootstrapMessage = () => {
     return `NeuroSort ${NEUROSORT_VERSION} toolchain bootstrap loaded`;
   };
@@ -1697,8 +1871,10 @@ var NeuroSort = (() => {
         saveQuickSettings: () => mount.showToast("Settings are managed by Sine preferences.")
       },
       settings: settingsFromPrefs(browser.prefs),
-      status: statusFromApp(app)
+      status: statusFromApp(app),
+      toolbarKind: browser.toolbarKind
     });
+    installChromeRetargeting(mount, browser);
     installAutoTidy(app, mount, browser);
     installShortcuts(app, mount, browser);
     return mount;
@@ -1719,7 +1895,7 @@ var NeuroSort = (() => {
     if (browser.addKeyListener === null) {
       return;
     }
-    const tidyShortcut = readString3(browser.prefs, "extensions.neurosort.keyboard_shortcut", void 0);
+    const tidyShortcut = readString(browser.prefs, "extensions.neurosort.keyboard_shortcut", void 0);
     const shortcuts = createShortcutMap(tidyShortcut === void 0 ? {} : { tidy: tidyShortcut });
     browser.addKeyListener((event) => {
       const action = getShortcutAction(event, shortcuts);
@@ -1740,8 +1916,8 @@ var NeuroSort = (() => {
     }
     const controller = createAutoTidyController(
       {
-        enabled: readBool2(browser.prefs, "extensions.neurosort.auto_tidy", false),
-        threshold: readInt2(browser.prefs, "extensions.neurosort.auto_tidy_threshold", 6),
+        enabled: readBool(browser.prefs, "extensions.neurosort.auto_tidy", false),
+        threshold: readInt(browser.prefs, "extensions.neurosort.auto_tidy_threshold", 6),
         cooldownMs: 3e4
       },
       createOperationCoordinator(),
@@ -1751,6 +1927,23 @@ var NeuroSort = (() => {
       void controller.run(ungroupedTabCount(browser.tabs, browser.workspaceId), () => runTidy2(app, mount, { trigger: "auto" }));
     });
     observer.observe(browser.tabContainer, { childList: true });
+  };
+  var chromeMountRetryDelays = [500, 1500, 3e3];
+  var installChromeRetargeting = (mount, browser) => {
+    const scheduleTimeout = browser.scheduleTimeout;
+    if (browser.toolbarKind === "preferred" || scheduleTimeout === null) {
+      return;
+    }
+    chromeMountRetryDelays.forEach((delayMs) => {
+      scheduleTimeout(() => {
+        const target = resolvePreferredChromeToolbar(browser.document);
+        if (target === null || mount.root.parentNode === target) {
+          return;
+        }
+        target.appendChild(mount.root);
+        mount.root.classList.remove("neurosort-chrome-fallback");
+      }, delayMs);
+    });
   };
   var statusFromApp = (app) => {
     const state = app.state();
@@ -1765,107 +1958,6 @@ var NeuroSort = (() => {
       case "failed":
         return { kind: "error", message: state.message, actionLabel: "Open settings" };
     }
-  };
-  var resolveBrowserRuntime = (runtime) => {
-    const document = getProperty3(runtime, "document");
-    const workspace = getProperty3(runtime, "gZenWorkspaces");
-    const toolbar = getProperty3(workspace, "activeWorkspaceStrip");
-    const gBrowser = getProperty3(runtime, "gBrowser");
-    if (!isChromeDocument(document) || !isChromeElement(toolbar)) {
-      return null;
-    }
-    const tabContainer = getProperty3(gBrowser, "tabContainer");
-    return {
-      document,
-      toolbar,
-      workspaceId: readWorkspaceId(workspace),
-      prefs: readPrefs(runtime),
-      tabs: readTabs(gBrowser),
-      tabContainer: isElementContainer2(tabContainer) ? tabContainer : null,
-      observer: readObserver(runtime),
-      addKeyListener: readKeyListener(runtime, document)
-    };
-  };
-  var settingsFromPrefs = (prefs) => {
-    const provider = readString3(prefs, "extensions.neurosort.provider", "disabled") ?? "disabled";
-    const prefix = `extensions.neurosort.${provider}`;
-    return {
-      providerLabel: provider,
-      modelLabel: readString3(prefs, `${prefix}.model`, "") ?? "",
-      endpointLabel: readString3(prefs, `${prefix}.endpoint`, "") ?? "",
-      apiKey: readString3(prefs, `${prefix}.api_key`, "") ?? ""
-    };
-  };
-  var selectedTabIds = (tabs) => {
-    return tabs.filter(isSelectedTab).map((tab) => tab.id);
-  };
-  var ungroupedTabCount = (tabs, workspaceId) => {
-    return tabs.filter((tab) => isCurrentWorkspaceTab(tab, workspaceId) && getProperty3(tab, "group") === null).length;
-  };
-  var isSelectedTab = (tab) => {
-    return typeof getProperty3(tab, "id") === "string" && (getProperty3(tab, "selected") === true || getProperty3(tab, "multiselected") === true);
-  };
-  var isCurrentWorkspaceTab = (tab, workspaceId) => {
-    const tabWorkspace = getProperty3(tab, "workspaceId");
-    return typeof tabWorkspace !== "string" || tabWorkspace === workspaceId;
-  };
-  var readWorkspaceId = (workspace) => {
-    const activeWorkspace = getProperty3(workspace, "activeWorkspace");
-    return typeof activeWorkspace === "string" && activeWorkspace.length > 0 ? activeWorkspace : "default";
-  };
-  var readPrefs = (runtime) => {
-    const prefs = getProperty3(getProperty3(runtime, "Services"), "prefs");
-    return isPrefs(prefs) ? prefs : null;
-  };
-  var readTabs = (gBrowser) => {
-    const tabs = getProperty3(gBrowser, "tabs");
-    return Array.isArray(tabs) ? tabs : [];
-  };
-  var readObserver = (runtime) => {
-    const observer = getProperty3(runtime, "MutationObserver") ?? getProperty3(globalThis, "MutationObserver");
-    return isMutationObserverConstructor(observer) ? observer : null;
-  };
-  var readKeyListener = (runtime, document) => {
-    const addRuntimeListener = getProperty3(runtime, "addEventListener");
-    if (typeof addRuntimeListener === "function") {
-      return (listener) => {
-        addRuntimeListener.call(runtime, "keydown", listener);
-      };
-    }
-    const addDocumentListener = getProperty3(document, "addEventListener");
-    if (typeof addDocumentListener === "function") {
-      return (listener) => {
-        addDocumentListener.call(document, "keydown", listener);
-      };
-    }
-    return null;
-  };
-  var readString3 = (prefs, name, fallback) => {
-    return prefs !== null && prefs.prefHasUserValue(name) && prefs.getPrefType(name) === prefs.PREF_STRING ? prefs.getStringPref(name) : fallback;
-  };
-  var readBool2 = (prefs, name, fallback) => {
-    return prefs !== null && prefs.prefHasUserValue(name) && prefs.getPrefType(name) === prefs.PREF_BOOL ? prefs.getBoolPref(name) : fallback;
-  };
-  var readInt2 = (prefs, name, fallback) => {
-    return prefs !== null && prefs.prefHasUserValue(name) && prefs.getPrefType(name) === prefs.PREF_INT ? prefs.getIntPref(name) : fallback;
-  };
-  var isChromeDocument = (value) => {
-    return typeof getProperty3(value, "createElement") === "function" && typeof getProperty3(value, "createTextNode") === "function";
-  };
-  var isChromeElement = (value) => {
-    return typeof getProperty3(value, "appendChild") === "function" && typeof getProperty3(value, "querySelector") === "function" && typeof getProperty3(value, "classList") === "object";
-  };
-  var isElementContainer2 = (value) => {
-    return typeof getProperty3(value, "appendChild") === "function" && typeof getProperty3(value, "querySelectorAll") === "function";
-  };
-  var isPrefs = (value) => {
-    return typeof getProperty3(value, "PREF_STRING") === "number" && typeof getProperty3(value, "prefHasUserValue") === "function" && typeof getProperty3(value, "getPrefType") === "function";
-  };
-  var isMutationObserverConstructor = (value) => {
-    return typeof value === "function" && typeof getProperty3(getProperty3(value, "prototype"), "observe") === "function" && typeof getProperty3(getProperty3(value, "prototype"), "disconnect") === "function";
-  };
-  var getProperty3 = (value, key) => {
-    return typeof value === "object" && value !== null || typeof value === "function" ? Reflect.get(value, key) : void 0;
   };
 
   // neurosort-build-entry.ts

@@ -1,6 +1,6 @@
-import type { ChromeDocument, ChromeElement, ChromeEventName } from "../../src/ui/dom";
+import type { ChromeDocument, ChromeElement, ChromeEvent, ChromeEventName } from "../../src/ui/dom";
 
-type Listener = () => void;
+type Listener = (event: ChromeEvent) => void;
 
 class FakeClassList {
   private readonly values = new Set<string>();
@@ -83,15 +83,18 @@ export class FakeChromeElement implements ChromeElement {
   }
 
   click(): void {
+    const event = new FakeChromeEvent();
     this.listeners.click?.forEach((listener) => {
-      listener();
+      listener(event);
     });
   }
 
-  dispatch(name: ChromeEventName): void {
+  dispatch(name: ChromeEventName): FakeChromeEvent {
+    const event = new FakeChromeEvent();
     this.listeners[name]?.forEach((listener) => {
-      listener();
+      listener(event);
     });
+    return event;
   }
 
   text(): string {
@@ -130,9 +133,34 @@ export class FakeChromeDocument implements ChromeDocument {
     return new FakeChromeElement(this, tagName);
   }
 
+  createXULElement(tagName: string): FakeChromeElement {
+    return new FakeChromeElement(this, tagName);
+  }
+
   createTextNode(text: string): FakeChromeElement {
     const node = new FakeChromeElement(this, "#text");
     node.textContent = text;
     return node;
+  }
+
+  querySelector(selector: string): FakeChromeElement | null {
+    return this.body.querySelector(selector);
+  }
+
+  querySelectorAll(selector: string): readonly FakeChromeElement[] {
+    return this.body.querySelectorAll(selector);
+  }
+}
+
+export class FakeChromeEvent implements ChromeEvent {
+  defaultPrevented = false;
+  propagationStopped = false;
+
+  preventDefault(): void {
+    this.defaultPrevented = true;
+  }
+
+  stopPropagation(): void {
+    this.propagationStopped = true;
   }
 }

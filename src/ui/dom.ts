@@ -1,5 +1,10 @@
 export type ChromeEventName = "click" | "contextmenu";
 
+export type ChromeEvent = {
+  readonly preventDefault?: () => void;
+  readonly stopPropagation?: () => void;
+};
+
 export interface ChromeClassList {
   add(token: string): void;
   remove(token: string): void;
@@ -14,7 +19,7 @@ export interface ChromeElement {
   appendChild(child: ChromeElement): void;
   removeChild(child: ChromeElement): void;
   remove(): void;
-  addEventListener(name: ChromeEventName, listener: () => void): void;
+  addEventListener(name: ChromeEventName, listener: (event: ChromeEvent) => void): void;
   setAttribute(name: string, value: string): void;
   querySelector(selector: string): ChromeElement | null;
   querySelectorAll(selector: string): readonly ChromeElement[];
@@ -23,8 +28,18 @@ export interface ChromeElement {
 export interface ChromeDocument {
   readonly body: ChromeElement;
   createElement(tagName: string): ChromeElement;
+  createXULElement?(tagName: string): ChromeElement;
   createTextNode(text: string): ChromeElement;
+  querySelector(selector: string): ChromeElement | null;
+  querySelectorAll(selector: string): readonly ChromeElement[];
 }
+
+export const createChromeElement = (document: ChromeDocument, tagName: string, fallbackTagName = tagName): ChromeElement => {
+  const createXULElement = document.createXULElement;
+  return typeof createXULElement === "function"
+    ? createXULElement.call(document, tagName)
+    : document.createElement(fallbackTagName);
+};
 
 export const appendText = (document: ChromeDocument, parent: ChromeElement, text: string): void => {
   parent.appendChild(document.createTextNode(text));
